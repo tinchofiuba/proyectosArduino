@@ -12,23 +12,37 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 DHT dht(DHTPIN, DHTTYPE);
 
+
+
+class calibrar {
+  public:
+    byte tiempoMedicion=15; //en segundos, tiempo de medición, a menso que se modifique
+    array  
+};
+
+class Sensor {
+  public:
+    virtual void calibrar() = 0;
+    virtual float leer() = 0;
+    virtual void enviar() = 0;
+};
+
+class SensorTemperaturaAgua : public Sensor {
+  public:
+    void calibrar(float referencia, float valor, byte numDatos) {
+      
+    }
+
+    float leer() {
+      return leerTemperaturaAgua();
+    }
+
+    void enviar() {
+      //enviar
+    }
+};
+
 float leerTemperaturaAgua() {
   sensors.requestTemperatures();
   return sensors.getTempCByIndex(0);
-}
-
-float leerHumedad() {
-  return dht.readHumidity();
-}
-
-float leerTemperaturaAmbiente() {
-  return dht.readTemperature();
-}
-
-float leerTDS() {
-  int sensorValue = analogRead(TDS_PIN);
-  float voltage = sensorValue * (5.0 / 1023.0);
-  // Convertir el voltaje a TDS (esto depende de tu sensor y su calibración)
-  float tdsValue = (voltage * 1000) / 2; // Ejemplo de conversión
-  return tdsValue;
 }
