@@ -1,10 +1,10 @@
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include <DHT.h>
-#inclue <WiFi.h>
-#include <HTTPClient.h>
+//#include <OneWire.h>
+//#include <DallasTemperature.h>
+//#include <DHT.h>
+//#inclue <WiFi.h>
+//#include <HTTPClient.h>
 
-urlPagina="tinchofiuba.pythonanywhere.com"
+//urlPagina="tinchofiuba.pythonanywhere.com"
 
 #define ONE_WIRE_BUS 2
 #define DHTPIN 3
@@ -15,6 +15,7 @@ urlPagina="tinchofiuba.pythonanywhere.com"
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 DHT dht(DHTPIN, DHTTYPE);
+
 
 float leerTemperaturaAgua() {
   sensors.requestTemperatures();
