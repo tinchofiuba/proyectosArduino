@@ -6,6 +6,7 @@ float leerTDS() {
   // Convertir el voltaje a TDS (esto depende de tu sensor y su calibración)
   float tdsValue = (voltage * 1000) / 2; // Ejemplo de conversión
   return tdsValue;
+  f(x)=1.52*x-36.13
 }
 
 void setup() {
