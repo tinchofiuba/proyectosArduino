@@ -1,12 +1,13 @@
 #include <WiFi.h>
 #include <WebServer.h>  
-#include "DHT.h"  // Librería para el sensor DHT
+#include <DHT.h>  // Librería para el sensor DHT
+#include <Arduino.h>
 
 #define DHTPIN 3 
 #define DHTTYPE DHT22
 #define TRIG_PIN 5 
 #define ECHO_PIN 7
-#define TDS_PIN 9
+#define TDS_PIN 12
 
 const char* ssid = "Telecentro-fd55";  
 const char* password = "VTWMK4AUKMRW";
@@ -19,6 +20,7 @@ void handleRoot() {
   float h = dht.readHumidity();
   float t = dht.readTemperature();
   long distancia = leerDistancia();
+  float TDS = leerTDS();
   // Si falla la lectura, muestra un mensaje de error
   if (isnan(h) || isnan(t)) {
     server.send(500, "text/plain", "Error al leer el sensor DHT!");
@@ -31,7 +33,7 @@ void handleRoot() {
   html += "<p><b>Temperatura:</b> " + String(t,2) + "</p>";
   html += "<p><b>Humedad:</b> " + String(h,2) + "</p>";
   html += "<p><b>Distancia:</b> " + String(distancia) + " mm</p>";
-  html += "<p><b>Conductividad:</b> " + String(TDS) + " uS</p>";
+  html += "<p><b>Conductividad:</b> " + String(TDS,2) + " uS</p>";
   html += "</body></html>";
 
   server.send(500, "text/html", html);
@@ -58,29 +60,23 @@ long leerDistancia() {
 
 float leerTDS() {
   int sensorValue = analogRead(TDS_PIN);
-  float voltage = sensorValue * (5.0 / 1023.0);
+  float voltage = sensorValue * (5.0 / 4096);
   // Convertir el voltaje a TDS (esto depende de tu sensor y su calibración)
   float tdsValue = (voltage * 1000) / 2; // Ejemplo de conversión
-  return tdsValue;
+  return tdsValue*1.52-36.13;
 }
 
 void setup() {
   Serial.begin(115200);
+  analogReadResolution(12);  // Configura resolución a 12 bits (0-4095)
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
-  dht.begin();  // Iniciar DHT
 
+  dht.begin();  // Iniciar DHT
   WiFi.begin(ssid, password);
-  Serial.print("Conectando a WiFi...");
-  
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
-    Serial.print(".");
   }
-
-  Serial.println("\nConectado a WiFi!");
-  Serial.print("Dirección IP: ");
-  Serial.println(WiFi.localIP());
 
   server.on("/", handleRoot);
   server.begin();
