@@ -1,87 +1,97 @@
 #include <WiFi.h>
-#include <WebServer.h>  
-#include <DHT.h>  // Librería para el sensor DHT
-#include <Arduino.h>
+#include <HTTPClient.h>
+#include <DHT.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
-#define DHTPIN 3 
+#define DHTPIN 5
 #define DHTTYPE DHT22
-#define TRIG_PIN 5 
-#define ECHO_PIN 7
-#define TDS_PIN 12
+#define TRIG_PIN 7
+#define ECHO_PIN 6
+#define TDS_PIN 2
+#define ONE_WIRE_BUS 4
 
-const char* ssid = "Telecentro-fd55";  
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+const char* ssid = "Telecentro-fd55";
 const char* password = "VTWMK4AUKMRW";
-
-WebServer server(80);  
 
 DHT dht(DHTPIN, DHTTYPE);
 
-void handleRoot() {
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  long distancia = leerDistancia();
-  float TDS = leerTDS();
-  // Si falla la lectura, muestra un mensaje de error
-  if (isnan(h) || isnan(t)) {
-    server.send(500, "text/plain", "Error al leer el sensor DHT!");
-    return;
-  }
-
-  // Página HTML con los valores en vivo
-  String html = "<html><head><meta http-equiv='refresh' content='5'></head><body>";
-  html += "<h1>ESP32-S2 - Monitoreo DHT</h1>";
-  html += "<p><b>Temperatura:</b> " + String(t,2) + "</p>";
-  html += "<p><b>Humedad:</b> " + String(h,2) + "</p>";
-  html += "<p><b>Distancia:</b> " + String(distancia) + " mm</p>";
-  html += "<p><b>Conductividad:</b> " + String(TDS,2) + " uS</p>";
-  html += "</body></html>";
-
-  server.send(500, "text/html", html);
-}
-
 long leerDistancia() {
-  long to=micros();
-  while(micros()-to<10)
-  {digitalWrite(TRIG_PIN, HIGH);}
-   digitalWrite(TRIG_PIN, LOW);  
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
 
-    // wait for echo pulse to go high
-    while(!digitalRead(ECHO_PIN)) ;  
-    // start timer
-    unsigned long StartTime = micros();
-    // wait for end of echo pulse (goes low)
-    while(digitalRead(ECHO_PIN)) ;
-    unsigned long CurrentTime = micros();
-    // calculate length of echo pulse in microseconds
-    unsigned long distancia = (CurrentTime - StartTime)*0.1911-37.21;
-  delay(1000);
-  return distancia;
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  return duration;
 }
 
 float leerTDS() {
   int sensorValue = analogRead(TDS_PIN);
-  float voltage = sensorValue * (5.0 / 4096);
-  // Convertir el voltaje a TDS (esto depende de tu sensor y su calibración)
-  float tdsValue = (voltage * 1000) / 2; // Ejemplo de conversión
-  return tdsValue*1.52-36.13;
+  return sensorValue;
 }
 
 void setup() {
   Serial.begin(115200);
-  analogReadResolution(12);  // Configura resolución a 12 bits (0-4095)
+  analogReadResolution(12); // Configura resolución a 12 bits (0-4095)
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
+  dht.begin(); // Iniciar DHT
+  sensors.begin(); // Iniciar sensor de temperatura del agua
 
-  dht.begin();  // Iniciar DHT
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
+    Serial.println("Conectando a WiFi...");
   }
-
-  server.on("/", handleRoot);
-  server.begin();
+  Serial.println("Conectado a WiFi");
 }
 
 void loop() {
-  server.handleClient();
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    sensors.requestTemperatures();
+    float tAgua = sensors.getTempCByIndex(0);
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+    long distancia = leerDistancia();
+    int TDS = leerTDS();
+    Serial.println(tAgua);
+    Serial.println(h);
+    Serial.println(t);
+    Serial.println(TDS);
+    Serial.println(distancia);
+
+    if (isnan(h) || isnan(t)) {
+      Serial.println("Error al leer el sensor DHT!");
+      return;
+    }
+
+    String serverPath = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
+
+    http.begin(serverPath.c_str());
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    String httpRequestData = "temp amb=" + String(t, 2) + "&humedad=" + String(h, 2) + "&distancia=" + String(distancia) + "&conductividad=" + String(TDS) + "&temp agua=" + String(tAgua, 2);
+    int httpResponseCode = http.POST(httpRequestData);
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println(httpResponseCode);
+      Serial.println(response);
+    } else {
+      Serial.print("Error en la solicitud POST: ");
+      Serial.println(httpResponseCode);
+    }
+
+    http.end();
+  } else {
+    Serial.println("WiFi desconectado");
+  }
+
+  delay(5000); // Esperar 5 segundos antes de enviar los datos nuevamente
 }
