@@ -21,11 +21,11 @@ const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
 DHT dht(DHTPIN, DHTTYPE);
 
-float tAguaArray[200];
-float humedadArray[200];
-float tempAmbArray[200];
-float distanciaArray[200];
-float tdsArray[200];
+float tAguaArray[10];
+float humedadArray[10];
+float tempAmbArray[10];
+float distanciaArray[10];
+float tdsArray[10];
 
 long leerDistancia() {
   digitalWrite(TRIG_PIN, LOW);
@@ -61,14 +61,13 @@ void setup() {
 
 void loop() {
 
-  for (int i = 0; i < 200; i++) {
+  for (int i = 0; i < 10; i++) {
     sensors.requestTemperatures();
     tAguaArray[i] = sensors.getTempCByIndex(0);
     humedadArray[i] = dht.readHumidity();
     tempAmbArray[i] = dht.readTemperature();
     distanciaArray[i] = leerDistancia();
     tdsArray[i] = leerTDS();
-    delay(50); // Pequeño retraso entre mediciones
   }
   // Crear un objeto JSON
   StaticJsonDocument<20000> jsonDoc; // Ajusta el tamaño según sea necesario
@@ -79,7 +78,7 @@ void loop() {
   JsonArray tdsJson = jsonDoc.createNestedArray("tds");
 
   // Rellenar los arrays JSON con los datos
-  for (int i = 0; i < 200; i++) {
+  for (int i = 0; i < 10; i++) {
     tAguaJson.add(tAguaArray[i]);
     humedadJson.add(humedadArray[i]);
     tempAmbJson.add(tempAmbArray[i]);
@@ -95,7 +94,6 @@ void loop() {
     HTTPClient http;
     http.begin(serverName);
     http.addHeader("Content-Type", "application/json");
-
     int httpResponseCode = http.POST(jsonString);
 
     if (httpResponseCode > 0) {
@@ -111,5 +109,4 @@ void loop() {
   } else {
     Serial.println("WiFi desconectado");
   }
-  delay(3000);
 }
