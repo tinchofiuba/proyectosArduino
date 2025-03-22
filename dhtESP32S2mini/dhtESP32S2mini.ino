@@ -3,11 +3,12 @@
 #include <DHT.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <ArduinoJson.h>
 
-#define DHTPIN 5
+#define DHTPIN 3
 #define DHTTYPE DHT22
-#define TRIG_PIN 7
-#define ECHO_PIN 6
+#define TRIG_PIN 6
+#define ECHO_PIN 7
 #define TDS_PIN 2
 #define ONE_WIRE_BUS 4
 
@@ -16,8 +17,15 @@ DallasTemperature sensors(&oneWire);
 
 const char* ssid = "Telecentro-fd55";
 const char* password = "VTWMK4AUKMRW";
+const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
 DHT dht(DHTPIN, DHTTYPE);
+
+float tAguaArray[200];
+float humedadArray[200];
+float tempAmbArray[200];
+float distanciaArray[200];
+float tdsArray[200];
 
 long leerDistancia() {
   digitalWrite(TRIG_PIN, LOW);
@@ -52,32 +60,43 @@ void setup() {
 }
 
 void loop() {
+
+  for (int i = 0; i < 200; i++) {
+    sensors.requestTemperatures();
+    tAguaArray[i] = sensors.getTempCByIndex(0);
+    humedadArray[i] = dht.readHumidity();
+    tempAmbArray[i] = dht.readTemperature();
+    distanciaArray[i] = leerDistancia();
+    tdsArray[i] = leerTDS();
+    delay(50); // Pequeño retraso entre mediciones
+  }
+  // Crear un objeto JSON
+  StaticJsonDocument<20000> jsonDoc; // Ajusta el tamaño según sea necesario
+  JsonArray tAguaJson = jsonDoc.createNestedArray("tAgua");
+  JsonArray humedadJson = jsonDoc.createNestedArray("humedad");
+  JsonArray tempAmbJson = jsonDoc.createNestedArray("tempAmb");
+  JsonArray distanciaJson = jsonDoc.createNestedArray("distancia");
+  JsonArray tdsJson = jsonDoc.createNestedArray("tds");
+
+  // Rellenar los arrays JSON con los datos
+  for (int i = 0; i < 200; i++) {
+    tAguaJson.add(tAguaArray[i]);
+    humedadJson.add(humedadArray[i]);
+    tempAmbJson.add(tempAmbArray[i]);
+    distanciaJson.add(distanciaArray[i]);
+    tdsJson.add(tdsArray[i]);
+  }
+
+  // Convertir el objeto JSON a una cadena
+  String jsonString;
+  serializeJson(jsonDoc, jsonString);
+
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    sensors.requestTemperatures();
-    float tAgua = sensors.getTempCByIndex(0);
-    float h = dht.readHumidity();
-    float t = dht.readTemperature();
-    long distancia = leerDistancia();
-    int TDS = leerTDS();
-    Serial.println(tAgua);
-    Serial.println(h);
-    Serial.println(t);
-    Serial.println(TDS);
-    Serial.println(distancia);
+    http.begin(serverName);
+    http.addHeader("Content-Type", "application/json");
 
-    if (isnan(h) || isnan(t)) {
-      Serial.println("Error al leer el sensor DHT!");
-      return;
-    }
-
-    String serverPath = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
-
-    http.begin(serverPath.c_str());
-    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-
-    String httpRequestData = "temp amb=" + String(t, 2) + "&humedad=" + String(h, 2) + "&distancia=" + String(distancia) + "&conductividad=" + String(TDS) + "&temp agua=" + String(tAgua, 2);
-    int httpResponseCode = http.POST(httpRequestData);
+    int httpResponseCode = http.POST(jsonString);
 
     if (httpResponseCode > 0) {
       String response = http.getString();
@@ -92,6 +111,5 @@ void loop() {
   } else {
     Serial.println("WiFi desconectado");
   }
-
-  delay(5000); // Esperar 5 segundos antes de enviar los datos nuevamente
+  delay(3000);
 }
