@@ -68,6 +68,7 @@ void loop() {
     tempAmbArray[i] = dht.readTemperature();
     distanciaArray[i] = leerDistancia();
     tdsArray[i] = leerTDS();
+    delay(10);
   }
   // Crear un objeto JSON
   StaticJsonDocument<20000> jsonDoc; // Ajusta el tamaño según sea necesario
