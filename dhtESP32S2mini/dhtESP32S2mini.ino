@@ -5,12 +5,19 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 
+#define TDS_PIN 2
 #define DHTPIN 3
 #define DHTTYPE DHT22
+#define ONE_WIRE_BUS 4
+#define PH_PIN 5
 #define TRIG_PIN 6
 #define ECHO_PIN 7
-#define TDS_PIN 2
-#define ONE_WIRE_BUS 4
+#define HHLLA_PIN 8
+#define LLLLA_PIN 9
+#define BOMB_PIN 10
+#define VALVULA_PIN 11
+
+
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -71,7 +78,7 @@ void loop() {
     delay(10);
   }
   // Crear un objeto JSON
-  StaticJsonDocument<20000> jsonDoc; // Ajusta el tamaño según sea necesario
+  StaticJsonDocument<20000> jsonDoc; 
   JsonArray tAguaJson = jsonDoc.createNestedArray("tAgua");
   JsonArray humedadJson = jsonDoc.createNestedArray("humedad");
   JsonArray tempAmbJson = jsonDoc.createNestedArray("tempAmb");
