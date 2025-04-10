@@ -22,17 +22,19 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
+byte numIter=5
 const char* ssid = "Telecentro-fd55";
 const char* password = "VTWMK4AUKMRW";
 const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
 DHT dht(DHTPIN, DHTTYPE);
 
-float tAguaArray[10];
-float humedadArray[10];
-float tempAmbArray[10];
-float distanciaArray[10];
-float tdsArray[10];
+float tAguaArray[numIter];
+float humedadArray[numIter];
+float tempAmbArray[numIter];
+float distanciaArray[numIter];
+float tdsArray[numIter];
+float phArray[numIter];
 
 long leerDistancia() {
   digitalWrite(TRIG_PIN, LOW);
@@ -47,6 +49,11 @@ long leerDistancia() {
 
 float leerTDS() {
   int sensorValue = analogRead(TDS_PIN);
+  return sensorValue;
+}
+
+float leerPH() {
+  int sensorValue = analogRead(PH_PIN);
   return sensorValue;
 }
 
@@ -68,13 +75,14 @@ void setup() {
 
 void loop() {
 
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < numIter; i++) {
     sensors.requestTemperatures();
     tAguaArray[i] = sensors.getTempCByIndex(0);
     humedadArray[i] = dht.readHumidity();
     tempAmbArray[i] = dht.readTemperature();
     distanciaArray[i] = leerDistancia();
     tdsArray[i] = leerTDS();
+    phArray[i] = leerPH();
     delay(10);
   }
   // Crear un objeto JSON
@@ -84,14 +92,16 @@ void loop() {
   JsonArray tempAmbJson = jsonDoc.createNestedArray("tempAmb");
   JsonArray distanciaJson = jsonDoc.createNestedArray("distancia");
   JsonArray tdsJson = jsonDoc.createNestedArray("tds");
+  JsonArray phJson = jsonDoc.createNestedArray("ph");
 
   // Rellenar los arrays JSON con los datos
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < numIter; i++) {
     tAguaJson.add(tAguaArray[i]);
     humedadJson.add(humedadArray[i]);
     tempAmbJson.add(tempAmbArray[i]);
     distanciaJson.add(distanciaArray[i]);
     tdsJson.add(tdsArray[i]);
+    phJson.add(phArray[i]);
   }
 
   // Convertir el objeto JSON a una cadena
