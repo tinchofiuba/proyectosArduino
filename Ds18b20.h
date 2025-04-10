@@ -14,7 +14,7 @@ class Ds18b20 : public Sensor {
     std::map<String, uint8_t> sensorMap; // Mapa para asociar nombres con índices
 
   public:
-.
+
     Ds18b20(String sensorName, uint8_t pin)
       : Sensor(sensorName) {
       oneWire = new OneWire(pin);

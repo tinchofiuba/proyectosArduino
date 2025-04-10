@@ -6,6 +6,6 @@
 
 class TDS: public Sensor {
     private:
-        .
+        
 
 }
