@@ -6,7 +6,6 @@
 class Sensor {
     protected:
     String name;
-
     public:
     Sensor(String sensorName) : name(sensorName) {};
     virtual void inicializar() = 0;
