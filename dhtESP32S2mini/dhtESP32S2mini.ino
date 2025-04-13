@@ -5,24 +5,24 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 
-#define TDS_PIN 2
-#define DHTPIN 3
+#define TDS_PIN 4
+#define DHTPIN 6
 #define DHTTYPE DHT22
-#define ONE_WIRE_BUS 4
-#define PH_PIN 5
-#define TRIG_PIN 6
-#define ECHO_PIN 7
-#define HHLLA_PIN 8
-#define LLLLA_PIN 9
-#define BOMB_PIN 10
-#define VALVULA_PIN 11
+#define ONE_WIRE_BUS 0
+#define PH_PIN 1
+#define TRIG_PIN 8
+#define ECHO_PIN 9
+#define HHLLA_PIN 7
+#define LLLLA_PIN 5
+#define BOMB_PIN 3
+#define VALVULA_PIN 2
 
 
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-byte numIter=5
+const int numIter = 5; 
 const char* ssid = "Telecentro-fd55";
 const char* password = "VTWMK4AUKMRW";
 const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
@@ -62,6 +62,8 @@ void setup() {
   analogReadResolution(12); // Configura resolución a 12 bits (0-4095)
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
+  pinMode(TDS_PIN, INPUT);
+  pinMode(PH_PIN, INPUT);
   dht.begin(); // Iniciar DHT
   sensors.begin(); // Iniciar sensor de temperatura del agua
 
@@ -85,6 +87,14 @@ void loop() {
     phArray[i] = leerPH();
     delay(10);
   }
+  Serial.println(tAguaArray[0]);
+  Serial.println(humedadArray[0]);
+  Serial.println(tempAmbArray[0]);
+  Serial.println(distanciaArray[0]);
+  Serial.println(tdsArray[0]);
+  Serial.println(phArray[0]);
+  Serial.println("fin");
+
   // Crear un objeto JSON
   StaticJsonDocument<20000> jsonDoc; 
   JsonArray tAguaJson = jsonDoc.createNestedArray("tAgua");
