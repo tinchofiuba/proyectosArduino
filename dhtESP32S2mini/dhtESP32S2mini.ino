@@ -79,11 +79,17 @@ void loop() {
 
   for (int i = 0; i < numIter; i++) {
     sensors.requestTemperatures();
+    delay(10);
     tAguaArray[i] = sensors.getTempCByIndex(0);
+    delay(10);
     humedadArray[i] = dht.readHumidity();
+    delay(10);
     tempAmbArray[i] = dht.readTemperature();
+    delay(10);
     distanciaArray[i] = leerDistancia();
+    delay(10);
     tdsArray[i] = leerTDS();
+    delay(10);
     phArray[i] = leerPH();
     delay(10);
   }
