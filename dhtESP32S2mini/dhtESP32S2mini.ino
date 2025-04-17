@@ -8,14 +8,14 @@
 #define TDS_PIN 4
 #define DHTPIN 6
 #define DHTTYPE DHT22
-#define ONE_WIRE_BUS 0
+#define ONE_WIRE_BUS 2
 #define PH_PIN 1
 #define TRIG_PIN 8
 #define ECHO_PIN 9
 #define HHLLA_PIN 7
 #define LLLLA_PIN 5
 #define BOMB_PIN 3
-#define VALVULA_PIN 2
+#define VALVULA_PIN 0
 
 
 
