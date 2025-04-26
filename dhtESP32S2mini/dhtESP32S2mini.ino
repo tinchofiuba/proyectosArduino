@@ -5,20 +5,22 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 
+//pines de sensores
 #define TDS_PIN 4
 #define DHTPIN 6
-#define DHTTYPE DHT22
-#define ONE_WIRE_BUS 2
-#define PH_PIN 1
+#define ONE_WIRE_BUS 7
+#define PH_PIN 5
 #define TRIG_PIN 8
 #define ECHO_PIN 9
-#define HHLLA_PIN 7
-#define LLLLA_PIN 5
-#define BOMB_PIN 3
+
+//pines ON/OFF
+#define HHLLA_PIN 3
+#define LLLLA_PIN 2
+#define BOMB_PIN 1
 #define VALVULA_PIN 0
 
 
-
+#define DHTTYPE DHT22
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
