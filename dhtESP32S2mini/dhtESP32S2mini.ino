@@ -9,14 +9,14 @@
 #define TDS_PIN 4
 #define DHTPIN 6
 #define ONE_WIRE_BUS 7
-#define PH_PIN 5
+#define PH_PIN 1
 #define TRIG_PIN 8
 #define ECHO_PIN 9
 
 //pines ON/OFF
 #define HHLLA_PIN 3
 #define LLLLA_PIN 2
-#define BOMB_PIN 1
+#define BOMB_PIN 5
 #define VALVULA_PIN 0
 
 
@@ -110,7 +110,7 @@ void loop() {
   JsonArray tempAmbJson = jsonDoc.createNestedArray("tempAmb");
   JsonArray distanciaJson = jsonDoc.createNestedArray("distancia");
   JsonArray tdsJson = jsonDoc.createNestedArray("tds");
-  JsonArray phJson = jsonDoc.createNestedArray("ph");
+  JsonArray phJson = jsonDoc.createNestedArray("phs");
 
   // Rellenar los arrays JSON con los datos
   for (int i = 0; i < numIter; i++) {
