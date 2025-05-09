@@ -18,8 +18,7 @@
 #define HHALL_PIN 3
 #define LLALL_PIN 2
 #define BOMB_PIN 5
-#define VALVULA1_PIN 0
-#define VALVULA2_PIN 10
+#define VALVULA_PIN 0
 
 
 #define DHTTYPE DHT22
@@ -69,8 +68,7 @@ void setup() {
   pinMode(HHALL_PIN, INPUT);
   pinMode(LLALL_PIN, INPUT);
   pinMode(BOMB_PIN, OUTPUT);
-  pinMode(VALVULA1_PIN, OUTPUT);
-  pinMode(VALVULA2_PIN, OUTPUT);
+  pinMode(VALVULA_PIN, OUTPUT);
   dht.begin(); // Iniciar DHT
   sensors.begin(); // Iniciar sensor de temperatura del agua
 
@@ -104,8 +102,7 @@ void loop() {
   byte bombaEstado = digitalRead(BOMB_PIN);
   byte HHALLEstado = digitalRead(HHALL_PIN);
   byte LLALLEstado = digitalRead(LLALL_PIN);
-  byte valvula1Estado = digitalRead(VALVULA1_PIN);
-  byte valvula2Estado = digitalRead(VALVULA2_PIN);
+  byte valvulaEstado = digitalRead(VALVULA_PIN);
   
   Serial.println(tAguaArray[0]);
   Serial.println(humedadArray[0]);
@@ -138,8 +135,7 @@ void loop() {
   jsonDoc["bomba"] = bombaEstado;
   jsonDoc["HHALL"] = HHALLEstado;
   jsonDoc["LLALL"] = LLALLEstado;
-  jsonDoc["valvula1"] = valvula1Estado;
-  jsonDoc["valvula2"] = valvula2Estado;
+  jsonDoc["valvula"] = valvulaEstado;
 
   // Convertir el objeto JSON a una cadena
   String jsonString;
