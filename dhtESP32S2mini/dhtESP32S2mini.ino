@@ -99,13 +99,14 @@ void loop() {
     delay(20);
     phArray[i] = leerPH();
     delay(20);
-    bombaArray[i] = digitalRead(BOMB_PIN);
-    HHALLArray[i] = digitalRead(HHALL_PIN);
-    LLALLArray[i] = digitalRead(LLALL_PIN);
-    valvula1Array[i] = digitalRead(VALVULA1_PIN);
-    valvula2Array[i] = digitalRead(VALVULA2_PIN);
-    delay(20);
   }
+
+  byte bombaEstado = digitalRead(BOMB_PIN);
+  byte HHALLEstado = digitalRead(HHALL_PIN);
+  byte LLALLEstado = digitalRead(LLALL_PIN);
+  byte valvula1Estado = digitalRead(VALVULA1_PIN);
+  byte valvula2Estado = digitalRead(VALVULA2_PIN);
+  
   Serial.println(tAguaArray[0]);
   Serial.println(humedadArray[0]);
   Serial.println(tempAmbArray[0]);
@@ -113,6 +114,7 @@ void loop() {
   Serial.println(tdsArray[0]);
   Serial.println(phArray[0]);
   Serial.println("fin");
+
 
   // Crear un objeto JSON
   StaticJsonDocument<20000> jsonDoc; 
@@ -122,11 +124,6 @@ void loop() {
   JsonArray distanciaJson = jsonDoc.createNestedArray("distancia");
   JsonArray tdsJson = jsonDoc.createNestedArray("tds");
   JsonArray phJson = jsonDoc.createNestedArray("phs");
-  JsonArray bombaJson = jsonDoc.createNestedArray("bomba");
-  JsonArray HHALLJson = jsonDoc.createNestedArray("HHALL");
-  JsonArray LLALLJson = jsonDoc.createNestedArray("LLALL");
-  JsonArray valvulaJson = jsonDoc.createNestedArray("valvula");
-
 
   // Rellenar los arrays JSON con los datos
   for (int i = 0; i < numIter; i++) {
@@ -136,11 +133,13 @@ void loop() {
     distanciaJson.add(distanciaArray[i]);
     tdsJson.add(tdsArray[i]);
     phJson.add(phArray[i]);
-    bombaJson.add(bombaArray[i]);
-    HHALLJson.add(HHALLArray[i]);
-    LLALLJson.add(LLALLArray[i]);
-    valvulaJson.add(valvulaArray[i]);
   }
+
+  jsonDoc["bomba"] = bombaEstado;
+  jsonDoc["HHALL"] = HHALLEstado;
+  jsonDoc["LLALL"] = LLALLEstado;
+  jsonDoc["valvula1"] = valvula1Estado;
+  jsonDoc["valvula2"] = valvula2Estado;
 
   // Convertir el objeto JSON a una cadena
   String jsonString;
@@ -165,4 +164,5 @@ void loop() {
   } else {
     Serial.println("WiFi desconectado");
   }
+  delay(3000);
 }
