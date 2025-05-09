@@ -1,4 +1,4 @@
-#include 
+#include "cred.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <DHT.h>
@@ -27,8 +27,6 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
 const int numIter = 5; 
-const char* ssid = "Telecentro-fd55";
-const char* password = "VTWMK4AUKMRW";
 const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
 DHT dht(DHTPIN, DHTTYPE);
