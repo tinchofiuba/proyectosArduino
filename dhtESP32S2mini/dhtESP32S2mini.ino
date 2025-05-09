@@ -1,3 +1,4 @@
+#include 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <DHT.h>
@@ -14,10 +15,11 @@
 #define ECHO_PIN 9
 
 //pines ON/OFF
-#define HHLLA_PIN 3
-#define LLLLA_PIN 2
+#define HHALL_PIN 3
+#define LLALL_PIN 2
 #define BOMB_PIN 5
 #define VALVULA_PIN 0
+#define VALVULA1_PIN 10
 
 
 #define DHTTYPE DHT22
@@ -40,9 +42,9 @@ float phArray[numIter];
 
 long leerDistancia() {
   digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
+  delayMicroseconds(20);
   digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
+  delayMicroseconds(30);
   digitalWrite(TRIG_PIN, LOW);
 
   long duration = pulseIn(ECHO_PIN, HIGH);
@@ -66,6 +68,11 @@ void setup() {
   pinMode(ECHO_PIN, INPUT);
   pinMode(TDS_PIN, INPUT);
   pinMode(PH_PIN, INPUT);
+  pinMode(HHALL_PIN, INPUT);
+  pinMode(LLALL_PIN, INPUT);
+  pinMode(BOMB_PIN, OUTPUT);
+  pinMode(VALVULA1_PIN, OUTPUT);
+  pinMode(VALVULA2_PIN, OUTPUT);
   dht.begin(); // Iniciar DHT
   sensors.begin(); // Iniciar sensor de temperatura del agua
 
@@ -81,19 +88,25 @@ void loop() {
 
   for (int i = 0; i < numIter; i++) {
     sensors.requestTemperatures();
-    delay(10);
+    delay(20);
     tAguaArray[i] = sensors.getTempCByIndex(0);
-    delay(10);
+    delay(20);
     humedadArray[i] = dht.readHumidity();
-    delay(10);
+    delay(20);
     tempAmbArray[i] = dht.readTemperature();
-    delay(10);
+    delay(20);
     distanciaArray[i] = leerDistancia();
-    delay(10);
+    delay(20);
     tdsArray[i] = leerTDS();
-    delay(10);
+    delay(20);
     phArray[i] = leerPH();
-    delay(10);
+    delay(20);
+    bombaArray[i] = digitalRead(BOMB_PIN);
+    HHALLArray[i] = digitalRead(HHALL_PIN);
+    LLALLArray[i] = digitalRead(LLALL_PIN);
+    valvula1Array[i] = digitalRead(VALVULA1_PIN);
+    valvula2Array[i] = digitalRead(VALVULA2_PIN);
+    delay(20);
   }
   Serial.println(tAguaArray[0]);
   Serial.println(humedadArray[0]);
@@ -111,6 +124,11 @@ void loop() {
   JsonArray distanciaJson = jsonDoc.createNestedArray("distancia");
   JsonArray tdsJson = jsonDoc.createNestedArray("tds");
   JsonArray phJson = jsonDoc.createNestedArray("phs");
+  JsonArray bombaJson = jsonDoc.createNestedArray("bomba");
+  JsonArray HHALLJson = jsonDoc.createNestedArray("HHALL");
+  JsonArray LLALLJson = jsonDoc.createNestedArray("LLALL");
+  JsonArray valvulaJson = jsonDoc.createNestedArray("valvula");
+
 
   // Rellenar los arrays JSON con los datos
   for (int i = 0; i < numIter; i++) {
@@ -120,6 +138,10 @@ void loop() {
     distanciaJson.add(distanciaArray[i]);
     tdsJson.add(tdsArray[i]);
     phJson.add(phArray[i]);
+    bombaJson.add(bombaArray[i]);
+    HHALLJson.add(HHALLArray[i]);
+    LLALLJson.add(LLALLArray[i]);
+    valvulaJson.add(valvulaArray[i]);
   }
 
   // Convertir el objeto JSON a una cadena
