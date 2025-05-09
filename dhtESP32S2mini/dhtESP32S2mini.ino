@@ -18,8 +18,8 @@
 #define HHALL_PIN 3
 #define LLALL_PIN 2
 #define BOMB_PIN 5
-#define VALVULA_PIN 0
-#define VALVULA1_PIN 10
+#define VALVULA1_PIN 0
+#define VALVULA2_PIN 10
 
 
 #define DHTTYPE DHT22
