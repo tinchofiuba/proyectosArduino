@@ -44,7 +44,8 @@ long leerDistancia() {
   delayMicroseconds(30);
   digitalWrite(TRIG_PIN, LOW);
 
-  long duration = pulseIn(ECHO_PIN, HIGH);
+  long duration = pulseIn(ECHO_PIN, HIGH,30000); // le agrego un timeout de 30ms
+  delay(60); //delayy para evitar mediciones erroneas por spurias
   return duration;
 }
 
