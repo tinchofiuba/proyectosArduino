@@ -39,9 +39,9 @@ float phArray[numIter];
 
 long leerDistancia() {
   digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(20);
+  delayMicroseconds(5);
   digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(30);
+  delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
   long duration = pulseIn(ECHO_PIN, HIGH,30000); // le agrego un timeout de 30ms
