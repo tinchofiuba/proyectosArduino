@@ -44,8 +44,8 @@ long leerDistancia() {
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
-  long duration = pulseIn(ECHO_PIN, HIGH,1000);
-  delay(60);
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  delay(30);
   return duration;
 
 }
@@ -108,7 +108,7 @@ void loop() {
 
 
   // Crear un objeto JSON
-  StaticJsonDocument<20000> jsonDoc; 
+  StaticJsonDocument<1000> jsonDoc; 
   JsonArray tAguaJson = jsonDoc.createNestedArray("tAgua");
   JsonArray humedadJson = jsonDoc.createNestedArray("humedad");
   JsonArray tempAmbJson = jsonDoc.createNestedArray("tempAmb");
@@ -134,7 +134,6 @@ void loop() {
   // Convertir el objeto JSON a una cadena
   String jsonString;
   serializeJson(jsonDoc, jsonString);
-
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     http.begin(serverName);
@@ -154,5 +153,5 @@ void loop() {
   } else {
     Serial.println("WiFi desconectado");
   }
-  delay(1000);
+  delay(2000);
 }
