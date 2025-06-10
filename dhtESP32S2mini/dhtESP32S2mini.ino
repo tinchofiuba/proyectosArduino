@@ -10,11 +10,11 @@
 #define TDS_PIN 4
 #define DHTPIN 6
 #define ONE_WIRE_BUS 7
-#define PH_PIN 1
+#define PH_PIN 2
 #define TRIG_PIN 8
 #define ECHO_PIN 9
 
-//pines ON/OFF
+//pines ON/OFFF
 #define HHALL_PIN 3
 #define LLALL_PIN 2
 #define BOMB_PIN 5
@@ -161,5 +161,5 @@ void loop() {
   } else {
     Serial.println("WiFi desconectado");
   }
-  delay(3000);
+  delay(1000);
 }
