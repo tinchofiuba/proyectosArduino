@@ -10,14 +10,14 @@
 #define TDS_PIN 4
 #define DHTPIN 6
 #define ONE_WIRE_BUS 7
-#define PH_PIN 2
 #define TRIG_PIN 8
 #define ECHO_PIN 9
 
-//pines ON/OFFF
+//pines ON/OFF
 #define HHALL_PIN 3
-#define LLALL_PIN 2
-#define BOMB_PIN 5
+#define LLALL_PIN 5 //SI O SI debe ser input!
+#define BOMB_PIN 2
+#define PH_PIN 1 //pin de PH, no se usa en este momento
 #define VALVULA_PIN 0
 
 
@@ -44,9 +44,10 @@ long leerDistancia() {
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
-  long duration = pulseIn(ECHO_PIN, HIGH,30000); // le agrego un timeout de 30ms
-  delay(60); //delayy para evitar mediciones erroneas por spurias
+  long duration = pulseIn(ECHO_PIN, HIGH,1000);
+  delay(60);
   return duration;
+
 }
 
 float leerTDS() {
@@ -65,7 +66,6 @@ void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(TDS_PIN, INPUT);
-  pinMode(PH_PIN, INPUT);
   pinMode(HHALL_PIN, INPUT);
   pinMode(LLALL_PIN, INPUT);
   pinMode(BOMB_PIN, OUTPUT);
@@ -85,19 +85,12 @@ void loop() {
 
   for (int i = 0; i < numIter; i++) {
     sensors.requestTemperatures();
-    delay(20);
     tAguaArray[i] = sensors.getTempCByIndex(0);
-    delay(20);
     humedadArray[i] = dht.readHumidity();
-    delay(20);
     tempAmbArray[i] = dht.readTemperature();
-    delay(20);
     distanciaArray[i] = leerDistancia();
-    delay(20);
     tdsArray[i] = leerTDS();
-    delay(20);
     phArray[i] = leerPH();
-    delay(20);
   }
 
   byte bombaEstado = digitalRead(BOMB_PIN);
