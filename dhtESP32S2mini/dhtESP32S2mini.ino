@@ -17,7 +17,7 @@
 #define HHALL_PIN 3
 #define LLALL_PIN 5 //SI O SI debe ser input!
 #define BOMB_PIN 2
-#define PH_PIN 1 //pin de PH, no se usa en este momento
+#define PH_PIN 1 
 #define VALVULA_PIN 0
 
 
@@ -70,8 +70,8 @@ void setup() {
   pinMode(LLALL_PIN, INPUT);
   pinMode(BOMB_PIN, OUTPUT);
   pinMode(VALVULA_PIN, OUTPUT);
-  dht.begin(); // Iniciar DHT
-  sensors.begin(); // Iniciar sensor de temperatura del agua
+  dht.begin(); 
+  sensors.begin(); 
 
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -107,7 +107,7 @@ void loop() {
   Serial.println("fin");
 
 
-  // Crear un objeto JSON
+  // Creo un objeto JSON
   StaticJsonDocument<1000> jsonDoc; 
   JsonArray tAguaJson = jsonDoc.createNestedArray("tAgua");
   JsonArray humedadJson = jsonDoc.createNestedArray("humedad");
@@ -116,7 +116,7 @@ void loop() {
   JsonArray tdsJson = jsonDoc.createNestedArray("tds");
   JsonArray phJson = jsonDoc.createNestedArray("phs");
 
-  // Rellenar los arrays JSON con los datos
+  // Relleno los arrays JSON con los datos
   for (int i = 0; i < numIter; i++) {
     tAguaJson.add(tAguaArray[i]);
     humedadJson.add(humedadArray[i]);
@@ -131,7 +131,7 @@ void loop() {
   jsonDoc["LLALL"] = LLALLEstado;
   jsonDoc["valvula"] = valvulaEstado;
 
-  // Convertir el objeto JSON a una cadena
+  // Convierto el objeto JSON a una cadena
   String jsonString;
   serializeJson(jsonDoc, jsonString);
   if (WiFi.status() == WL_CONNECTED) {
@@ -151,7 +151,13 @@ void loop() {
 
     http.end();
   } else {
-    Serial.println("WiFi desconectado");
+    Serial.println("WiFi desconectado! reconectando...");
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(1000);
+      Serial.println("Reconectando a WiFi...");
+    }
+    Serial.println("WiFi reconectado");
   }
   delay(2000);
 }
