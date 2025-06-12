@@ -159,5 +159,5 @@ void loop() {
     }
     Serial.println("WiFi reconectado");
   }
-  delay(2000);
+  delay(4000);
 }
