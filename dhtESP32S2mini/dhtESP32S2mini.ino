@@ -75,7 +75,7 @@ void setup() {
 
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
+    delay(3000);
     Serial.println("Conectando a WiFi...");
   }
   Serial.println("Conectado a WiFi");
@@ -154,7 +154,7 @@ void loop() {
     Serial.println("WiFi desconectado! reconectando...");
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
-      delay(1000);
+      delay(3000);
       Serial.println("Reconectando a WiFi...");
     }
     Serial.println("WiFi reconectado");
