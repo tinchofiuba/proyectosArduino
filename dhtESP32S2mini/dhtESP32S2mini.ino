@@ -6,26 +6,36 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 
-//pines de sensores
-#define TDS_PIN 4
-#define DHTPIN 6
-#define ONE_WIRE_BUS 7
-#define TRIG_PIN 8
-#define ECHO_PIN 9
+//pines de sensores analógicos
+#define TDS_PIN 1
+#define PH_PIN 2
 
-//pines ON/OFF
-#define HHALL_PIN 3
-#define LLALL_PIN 5 //SI O SI debe ser input!
-#define BOMB_PIN 2
-#define PH_PIN 1 
-#define VALVULA_PIN 0
+//activadores analógicos
+#define wifi_ON_Off 3
+#define control_On_Off 4
 
+//pines digitales ON / OFF de nivel
+#define HHALL_PIN 11 //pines en batea de recolección
+#define LLALL_PIN 12 //pines en batea de recolección
+//
+#define HHALL_PIN 13 //pines en batea de bombeo
+#define LALL_PIN 14 //pines en batea de bombeo
+#define HALL_PIN 15 //pines en batea de bombeo
+#define LLALL_PIN 16 //pines en batea de bombeo
+
+//pines de sensores y/o actuadores digitales
+#define DHTPIN 17
+#define BOMB_PIN 18
+#define VALVULA_PIN 19
+#define ONE_WIRE_BUS 20
+#define TRIG_PIN 21
+#define ECHO_PIN 22
 
 #define DHTTYPE DHT22
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-const int numIter = 5; 
+const int numIter = 8; 
 const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -45,9 +55,8 @@ long leerDistancia() {
   digitalWrite(TRIG_PIN, LOW);
 
   long duration = pulseIn(ECHO_PIN, HIGH);
-  delay(30);
+  delay(120);
   return duration;
-
 }
 
 float leerTDS() {
