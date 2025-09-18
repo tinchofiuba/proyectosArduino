@@ -1,0 +1,10 @@
+1-2-3-4-5-6-7-8-9-10 pines ADC-1 entgrada analogica y digital
+
+11-12-13-14-15-16-17-18 ADC-2 NO usar con wifi, pero sde puede usar como entrada/salida digital
+
+21-33-38 se pueden usar como in/out digital
+
+34,35,36,37 MOSI (GPIO35), MISO (GPIO37), SCK (GPIO36), CS (GPIO34) No usar como digitales o analogicos
+39-40 NO usar!
+
+lo que flata ver es como hacer para reiniciar internamente el equipo en caso de que no conecte
