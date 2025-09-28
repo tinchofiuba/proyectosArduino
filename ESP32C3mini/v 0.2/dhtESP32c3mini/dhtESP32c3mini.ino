@@ -53,8 +53,8 @@ byte x1Estado;        // C6
 byte x2Estado;        // C7
 
 // Sensores analógicos - arrays con múltiples mediciones
-float conductividadArray[numIter]; // C8
-float phArray[numIter];        // C9
+float conductividadArray[numIter]; // C9
+float phArray[numIter];        // C8
 
 // Función para seleccionar canal del multiplexor
 void seleccionarCanalMUX(int canal) {
@@ -162,8 +162,9 @@ void loop() {
   x2Estado = leerSensorDigitalMUX(7);        // C7
 
   // Leer sensores analógicos que requieren múltiples mediciones (C8-C9)
-  leerSensorAnalogicoMultiple(8, conductividadArray, numIter);  // C8 - Conductividad
-  leerSensorAnalogicoMultiple(9, phArray, numIter);             // C9 - pH
+  leerSensorAnalogicoMultiple(8, phArray, numIter);             // C8 - pH
+  leerSensorAnalogicoMultiple(9, conductividadArray, numIter);  // C9 - Conductividad
+
 
   // Leer estados de pines digitales
   byte bombaEstado = digitalRead(PIN_BOMBA);
@@ -254,11 +255,11 @@ void loop() {
     }
     Serial.println("WiFi reconectado");
   }
-  delay(4000);
+  delay(2000);
   }
   else{
     Serial.println("PIN_TRASMITIR no esta HIGH");
-    delay(4000);
+    delay(200);
   }
 
 }
