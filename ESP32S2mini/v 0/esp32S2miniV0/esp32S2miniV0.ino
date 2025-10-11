@@ -10,8 +10,8 @@
 #define AS5600_ADDR 0x36  // Dirección I2C por defecto del AS5600
 
 //pines analógicos
-#define PIN_PH 2 //pin del ph (ADC1_2)
-#define PIN_EC 4 //pin del conductimetro (ADC1_4)xx,,,mm    
+#define PIN_PH 3 //pin del ph (ADC1_2)
+#define PIN_EC 5 //pin del conductimetro (ADC1_4)xx,,,mm    
 
 //pines ON /OFF
 #define LL 43 // tacho ppal
@@ -29,7 +29,7 @@ int n_pines_on_off = sizeof(pines_on_off) / sizeof(pines_on_off[0]);
 #define pin_SCL 9
 
 //pines digitales sensores
-#define DS18B20 13 // pin 18 no puede usar pull-up/pull-down OJO
+#define DS18B20 13 // pin 18 no puede usar pull-up/pull-down OJOhi
 #define DHTPIN 11 // pin para sensor DHT22
 #define DHTTYPE DHT22
 
@@ -51,7 +51,7 @@ DallasTemperature sensors(&oneWire);
 DHT dht(DHTPIN, DHTTYPE);
 
 const int numIter = 10; 
-const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia12/";
+const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
 float tAguaArray[numIter];
 float humedadArray[numIter];
