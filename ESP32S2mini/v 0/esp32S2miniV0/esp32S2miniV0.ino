@@ -102,10 +102,6 @@ void setup() {
   analogReadResolution(12); // Configura resolución a 12 bits (0-4095)
   Wire.begin();  // Inicia I2C
 
-  // Configurar pines de ultrasonido
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-
   // Configurar pines de bombas y establecer estados iniciales
   pinMode(PIN_BOMBA_PPAL, OUTPUT);
   bombaPpalEstado = true;  // Bomba principal ON por defecto
@@ -130,10 +126,6 @@ void setup() {
   pinMode(PIN_BOMBA_AGUA_RESERVA, OUTPUT);
   bombaAguaReservaEstado = false;  // Apagada por defecto
   digitalWrite(PIN_BOMBA_AGUA_RESERVA, LOW);
-  
-  //pinMode(PIN_SERVO_PH, OUTPUT);
-  //servoMotorPhEstado = false;  // Servo en posición inicial
-  //digitalWrite(PIN_SERVO_PH, 0); // TODO: usar librería Servo para control adecuado
   
 //seteo pull-down a todos los pines de on/off
   for (int i = 0; i < n_pines_on_off; i++) {
@@ -199,9 +191,7 @@ void loop() {
     byte hEstado = digitalRead(H);
     byte lEstado = digitalRead(L);
     byte llEstado = digitalRead(LL);
-    byte hh_2Estado = digitalRead(HH_2);
-    byte ll_2Estado = digitalRead(LL_2);
-    
+
     // Debug - mostrar valores
     Serial.println("=== SENSORES ===");
     Serial.print("Temperatura agua: "); Serial.println(tAguaArray[0]);
@@ -212,8 +202,6 @@ void loop() {
     Serial.print("H: "); Serial.println(hEstado ? "encontacto" : "libre");
     Serial.print("L: "); Serial.println(lEstado ? "encontacto" : "libre");
     Serial.print("LL: "); Serial.println(llEstado ? "encontacto" : "libre");
-    Serial.print("HH_2: "); Serial.println(hh_2Estado ? "encontacto" : "libre");
-    Serial.print("LL_2: "); Serial.println(ll_2Estado ? "encontacto" : "libre");
     Serial.print("TDS: "); Serial.println(conductividadArray[0]);
     Serial.print("pH: "); Serial.println(phArray[0]);
     Serial.print("Bomba ppal: "); Serial.println(bombaPpalEstado ? "ON" : "OFF");
@@ -222,7 +210,6 @@ void loop() {
     Serial.print("Bomba micro: "); Serial.println(bombaMicroEstado ? "ON" : "OFF");
     Serial.print("Bomba FE: "); Serial.println(bombaFEEstado ? "ON" : "OFF");
     Serial.print("Bomba agua reserva: "); Serial.println(bombaAguaReservaEstado ? "ON" : "OFF");
-    Serial.print("Servo PH: "); Serial.println(servoMotorPhEstado ? "ON" : "OFF");
     Serial.print("Transmitir: "); Serial.println(transmitirEstado);
     Serial.println("=== FIN ===");
 
@@ -233,8 +220,6 @@ void loop() {
     jsonDoc["H"] = hEstado;
     jsonDoc["L"] = lEstado;
     jsonDoc["LL"] = llEstado;
-    jsonDoc["HH_2"] = hh_2Estado;
-    jsonDoc["LL_2"] = ll_2Estado;
 
     // Estados de pines digitales de bombas y otros
     jsonDoc["bomba_ppal"] = bombaPpalEstado;
@@ -243,10 +228,10 @@ void loop() {
     jsonDoc["bombaMicro"] = bombaMicroEstado;
     jsonDoc["bombaFE"] = bombaFEEstado;
     jsonDoc["bombaAguaReserva"] = bombaAguaReservaEstado;
-    jsonDoc["servoMotorPh"] = servoMotorPhEstado;
 
     // TODO LO QUE VIENE ABAJO LO HAGO SI EL PIN_TRASMITIR ESTA HIGH
-    if (transmitirEstado == HIGH) {
+    Serial.print("transmitirEstado: "); Serial.println(transmitirEstado);
+    if (transmitirEstado == LOW) {
       // Convierto el objeto JSON a una cadena
       String jsonString;
       serializeJson(jsonDoc, jsonString);
