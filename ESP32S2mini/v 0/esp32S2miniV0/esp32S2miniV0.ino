@@ -29,7 +29,7 @@ int n_pines_on_off = sizeof(pines_on_off) / sizeof(pines_on_off[0]);
 #define pin_SCL 9
 
 //pines digitales sensores
-#define DS18B20 13 // pin 18 no puede usar pull-up/pull-down OJOhi
+#define DS18B20 13 // pin 18 no puede usar pull-up/pull-down OJO
 #define DHTPIN 11 // pin para sensor DHT22
 #define DHTTYPE DHT22
 
@@ -51,7 +51,7 @@ DallasTemperature sensors(&oneWire);
 DHT dht(DHTPIN, DHTTYPE);
 
 const int numIter = 10; 
-const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
+const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia12/";
 
 float tAguaArray[numIter];
 float humedadArray[numIter];
@@ -100,6 +100,7 @@ float leerAngulo() {
 void setup() {
   Serial.begin(115200);
   analogReadResolution(12); // Configura resolución a 12 bits (0-4095)
+  analogSetAttenuation(ADC_11db); // Configura rango de medición 0-3.6V (IMPORTANTE)
   Wire.begin();  // Inicia I2C
 
   // Configurar pines de bombas y establecer estados iniciales
