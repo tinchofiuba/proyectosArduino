@@ -1,2 +1,0 @@
-todo lo que sea ACD-2 con wifi no sirve.
-todos los pines pueden ser seteados pull/pulldown MENOS el pin 18

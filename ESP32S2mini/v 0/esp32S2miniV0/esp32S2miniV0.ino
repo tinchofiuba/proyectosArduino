@@ -14,10 +14,10 @@
 #define PIN_EC 5 //pin del conductimetro (ADC1_4)xx,,,mm    
 
 //pines ON /OFF
-#define LL 43 // tacho ppal
-#define L 41 // tacho ppal
-#define H 39 // tacho ppal
-#define HH 37 // tacho ppal
+#define LL 33 // tacho ppal
+#define L 35 // tacho ppal
+#define H 37 // tacho ppal
+#define HH 39 // tacho ppal
 
 #define PIN_TRASMITIR 7 // habilitación de envío de datos
 
@@ -261,7 +261,7 @@ void loop() {
         }
         Serial.println("WiFi reconectado");
       }
-      delay(1000);
+      delay(3000);
     }
     else{
       Serial.println("PIN_TRASMITIR NO HABILITA LA TRANSMISION DE DATOS");
