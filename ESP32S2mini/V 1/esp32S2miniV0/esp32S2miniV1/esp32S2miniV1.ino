@@ -48,7 +48,7 @@ OneWire oneWire(DS18B20);
 DallasTemperature sensors(&oneWire);
 
 const int numIter = 10; 
-const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia12/";
+const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
 float tAguaArray[numIter];
 float tempAmbArray[numIter];
