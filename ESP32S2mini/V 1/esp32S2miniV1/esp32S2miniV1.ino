@@ -29,7 +29,7 @@ int n_pines_on_off = sizeof(pines_on_off) / sizeof(pines_on_off[0]);
 #define pin_SCL 9
 
 //pines digitales sensores
-#define DS18B20 13 // pin 18 no puede usar pull-up/pull-down OJO
+#define DS18B20 11 // pin 18 no puede usar pull-up/pull-down OJO
 
 //pines de bombas y servomotores y/o motores
 #define PIN_SERVO_PH 24 //servomotor para el phmetro
