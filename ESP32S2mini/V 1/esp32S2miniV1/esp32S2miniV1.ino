@@ -62,7 +62,7 @@ const char* consultarEndpoint = "/consultar-mensajes/";
 const char* confirmacionEndpoint = "/esp32-confirmacion/";
 
 // Variables para polling de mensajes
-const unsigned long intervaloConsulta = 1000;  // Consultar cada 1 segundo
+const unsigned long intervaloConsulta = 500;   // Consultar cada 0.5 segundos
 
 // Cliente HTTPS seguro
 WiFiClientSecure secureClient;
@@ -118,44 +118,44 @@ float leerAngulo() {
 void controlarBomba(const char* bombaNombre, bool estado) {
   // Proteger acceso a variables compartidas
   if (xSemaphoreTake(mutexBombas, portMAX_DELAY) == pdTRUE) {
-    Serial.print("🔧 Comando recibido: Bomba '");
-    Serial.print(bombaNombre);
-    Serial.print("' -> ");
-    Serial.println(estado ? "ON" : "OFF");
+    // Serial.print("🔧 Comando recibido: Bomba '");
+    // Serial.print(bombaNombre);
+    // Serial.print("' -> ");
+    // Serial.println(estado ? "ON" : "OFF");
     
     if (strcmp(bombaNombre, "recirculado") == 0) {
-      Serial.println("  → Mapeado a: Bomba Principal (PIN_BOMBA_PPAL)");
+      // Serial.println("  → Mapeado a: Bomba Principal (PIN_BOMBA_PPAL)");
       digitalWrite(PIN_BOMBA_PPAL, estado ? HIGH : LOW);
       bombaPpalEstado = estado;
     }
     else if (strcmp(bombaNombre, "solucionA") == 0) {
-      Serial.println("  → Mapeado a: Bomba A (PIN_BOMBA_A)");
+      // Serial.println("  → Mapeado a: Bomba A (PIN_BOMBA_A)");
       digitalWrite(PIN_BOMBA_A, estado ? HIGH : LOW);
       bombaAEstado = estado;
     }
     else if (strcmp(bombaNombre, "solucionB") == 0) {
-      Serial.println("  → Mapeado a: Bomba B (PIN_BOMBA_B)");
+      // Serial.println("  → Mapeado a: Bomba B (PIN_BOMBA_B)");
       digitalWrite(PIN_BOMBA_B, estado ? HIGH : LOW);
       bombaBEstado = estado;
     }
     else if (strcmp(bombaNombre, "micro") == 0) {
-      Serial.println("  → Mapeado a: Bomba Micro (PIN_BOMBA_micro)");
+      // Serial.println("  → Mapeado a: Bomba Micro (PIN_BOMBA_micro)");
       digitalWrite(PIN_BOMBA_micro, estado ? HIGH : LOW);
       bombaMicroEstado = estado;
     }
     else if (strcmp(bombaNombre, "macro") == 0) {
-      Serial.println("  → Mapeado a: Bomba FE (PIN_BOMBA_FE)");
+      // Serial.println("  → Mapeado a: Bomba FE (PIN_BOMBA_FE)");
       digitalWrite(PIN_BOMBA_FE, estado ? HIGH : LOW);
       bombaFEEstado = estado;
     }
     else if (strcmp(bombaNombre, "llenado") == 0) {
-      Serial.println("  → Mapeado a: Bomba Agua Reserva (PIN_BOMBA_AGUA_RESERVA)");
+      // Serial.println("  → Mapeado a: Bomba Agua Reserva (PIN_BOMBA_AGUA_RESERVA)");
       digitalWrite(PIN_BOMBA_AGUA_RESERVA, estado ? HIGH : LOW);
       bombaAguaReservaEstado = estado;
     }
     else {
-      Serial.print("  ⚠️ Bomba desconocida: ");
-      Serial.println(bombaNombre);
+      // Serial.print("  ⚠️ Bomba desconocida: ");
+      // Serial.println(bombaNombre);
     }
     
     xSemaphoreGive(mutexBombas);
@@ -187,15 +187,14 @@ void consultarMensajes() {
     if (!error) {
       bool hayMensaje = doc["hay_mensaje"];
       
-      if (hayMensaje) {
+      if (hayMensaje) {        
         const char* bombaNombre = doc["bomba"];
         bool estado = doc["estado"];
-        
-        Serial.println("✅ Mensaje recibido del backend!");
-        Serial.print("  Bomba: ");
-        Serial.println(bombaNombre);
-        Serial.print("  Estado: ");
-        Serial.println(estado ? "ON" : "OFF");
+        // Serial.println("✅ Mensaje recibido del backend!");
+        // Serial.print("  Bomba: ");
+        // Serial.println(bombaNombre);
+        // Serial.print("  Estado: ");
+        // Serial.println(estado ? "ON" : "OFF");
         
         // Controlar la bomba (por ahora solo Serial.println)
         controlarBomba(bombaNombre, estado);
@@ -204,12 +203,12 @@ void consultarMensajes() {
         enviarConfirmacionAlBackend(bombaNombre, estado);
       }
     } else {
-      Serial.print("❌ Error parseando JSON: ");
-      Serial.println(error.c_str());
+      // Serial.print("❌ Error parseando JSON: ");
+      // Serial.println(error.c_str());
     }
   } else {
-    Serial.print("❌ Error en consulta: ");
-    Serial.println(httpResponseCode);
+    // Serial.print("❌ Error en consulta: ");
+    // Serial.println(httpResponseCode);
   }
   
   http.end();
@@ -238,17 +237,17 @@ void enviarConfirmacionAlBackend(const char* bombaNombre, bool estado) {
   String jsonString;
   serializeJson(doc, jsonString);
   
-  Serial.print("📤 Enviando confirmación: ");
-  Serial.println(jsonString);
+  // Serial.print("📤 Enviando confirmación: ");
+  // Serial.println(jsonString);
   
   int httpResponseCode = http.POST(jsonString);
   
   if (httpResponseCode > 0) {
-    Serial.print("✅ Confirmación enviada. Código: ");
-    Serial.println(httpResponseCode);
+    // Serial.print("✅ Confirmación enviada. Código: ");
+    // Serial.println(httpResponseCode);
   } else {
-    Serial.print("❌ Error enviando confirmación: ");
-    Serial.println(httpResponseCode);
+    // Serial.print("❌ Error enviando confirmación: ");
+    // Serial.println(httpResponseCode);
   }
   
   http.end();
@@ -258,7 +257,7 @@ void enviarConfirmacionAlBackend(const char* bombaNombre, bool estado) {
 // TAREA DE POLLING DEL BACKEND (FreeRTOS Task)
 // ============================================================================
 void tareaPollingBackend(void *parameter) {
-  Serial.println("🚀 Tarea de polling iniciada");
+  // Serial.println("🚀 Tarea de polling iniciada");
 
   // Usamos vTaskDelayUntil para que el PERIODO total sea cercano a intervaloConsulta,
   // compensando el tiempo que tarda consultarMensajes() (HTTP, parseo, etc.).
@@ -314,11 +313,11 @@ void setup() {
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(3000);
-    Serial.println("Conectando a WiFi...");
+    // Serial.println("Conectando a WiFi...");
   }
-  Serial.println("Conectado a WiFi");
-  Serial.print("📍 IP: ");
-  Serial.println(WiFi.localIP());
+  // Serial.println("Conectado a WiFi");
+  // Serial.print("📍 IP: ");
+  // Serial.println(WiFi.localIP());
   
   // Configurar cliente seguro para HTTPS
   secureClient.setInsecure();  // Ignorar certificado SSL (solo para pruebas)
@@ -326,7 +325,7 @@ void setup() {
   // Crear semáforo mutex para proteger variables compartidas
   mutexBombas = xSemaphoreCreateMutex();
   if (mutexBombas == NULL) {
-    Serial.println("❌ Error creando semáforo mutex");
+    // Serial.println("❌ Error creando semáforo mutex");
   }
   
   // Crear tarea de polling del backend (multitarea)
@@ -340,8 +339,8 @@ void setup() {
     NULL                      // Handle de la tarea (no necesario)
   );
   
-  Serial.println("🌐 Sistema de polling de mensajes activado en tarea separada (cada 1 segundo)");
-  Serial.println("📊 Mediciones de sensores ejecutándose en tarea principal (sin bloqueo)");
+  // Serial.println("🌐 Sistema de polling de mensajes activado en tarea separada (cada 1 segundo)");
+  // Serial.println("📊 Mediciones de sensores ejecutándose en tarea principal (sin bloqueo)");
   
 }
 
@@ -379,23 +378,23 @@ void loop() {
     byte lEstado = digitalRead(L);
     byte llEstado = digitalRead(LL);
 
-    Serial.println("=== SENSORES ===");
-    Serial.print("Temperatura agua: "); Serial.println(tAguaArray[0]);
-    Serial.print("Distancia: "); Serial.println(distanciaArray[0]);
-    Serial.print("HH: "); Serial.println(hhEstado ? "encontacto" : "libre");
-    Serial.print("H: "); Serial.println(hEstado ? "encontacto" : "libre");
-    Serial.print("L: "); Serial.println(lEstado ? "encontacto" : "libre");
-    Serial.print("LL: "); Serial.println(llEstado ? "encontacto" : "libre");
-    Serial.print("TDS: "); Serial.println(conductividadArray[0]);
-    Serial.print("pH: "); Serial.println(phArray[0]);
-    Serial.print("Bomba ppal: "); Serial.println(bombaPpalEstado ? "ON" : "OFF");
-    Serial.print("Bomba A: "); Serial.println(bombaAEstado ? "ON" : "OFF");
-    Serial.print("Bomba B: "); Serial.println(bombaBEstado ? "ON" : "OFF");
-    Serial.print("Bomba micro: "); Serial.println(bombaMicroEstado ? "ON" : "OFF");
-    Serial.print("Bomba FE: "); Serial.println(bombaFEEstado ? "ON" : "OFF");
-    Serial.print("Bomba agua reserva: "); Serial.println(bombaAguaReservaEstado ? "ON" : "OFF");
-    Serial.print("Transmitir: "); Serial.println(transmitirEstado);
-    Serial.println("=== FIN ===");
+    // Serial.println("=== SENSORES ===");
+    // Serial.print("Temperatura agua: "); Serial.println(tAguaArray[0]);
+    // Serial.print("Distancia: "); Serial.println(distanciaArray[0]);
+    // Serial.print("HH: "); Serial.println(hhEstado ? "encontacto" : "libre");
+    // Serial.print("H: "); Serial.println(hEstado ? "encontacto" : "libre");
+    // Serial.print("L: "); Serial.println(lEstado ? "encontacto" : "libre");
+    // Serial.print("LL: "); Serial.println(llEstado ? "encontacto" : "libre");
+    // Serial.print("TDS: "); Serial.println(conductividadArray[0]);
+    // Serial.print("pH: "); Serial.println(phArray[0]);
+    // Serial.print("Bomba ppal: "); Serial.println(bombaPpalEstado ? "ON" : "OFF");
+    // Serial.print("Bomba A: "); Serial.println(bombaAEstado ? "ON" : "OFF");
+    // Serial.print("Bomba B: "); Serial.println(bombaBEstado ? "ON" : "OFF");
+    // Serial.print("Bomba micro: "); Serial.println(bombaMicroEstado ? "ON" : "OFF");
+    // Serial.print("Bomba FE: "); Serial.println(bombaFEEstado ? "ON" : "OFF");
+    // Serial.print("Bomba agua reserva: "); Serial.println(bombaAguaReservaEstado ? "ON" : "OFF");
+    // Serial.print("Transmitir: "); Serial.println(transmitirEstado);
+    // Serial.println("=== FIN ===");
 
 
 
@@ -416,7 +415,7 @@ void loop() {
     }
 
     //TODO LO QUE VIENE ABAJO LO HAGO SI EL PIN_TRASMITIR ESTA LOW
-    Serial.print("transmitirEstado: "); Serial.println(transmitirEstado);
+    // Serial.print("transmitirEstado: "); Serial.println(transmitirEstado);
     if (transmitirEstado == LOW) {
 
       String jsonString;
@@ -429,27 +428,27 @@ void loop() {
 
         if (httpResponseCode > 0) {
           String response = http.getString();
-          Serial.println(httpResponseCode);
-          Serial.println(response);
+          // Serial.println(httpResponseCode);
+          // Serial.println(response);
         } else {
-          Serial.print("Error en la solicitud POST: ");
-          Serial.println(httpResponseCode);
+          // Serial.print("Error en la solicitud POST: ");
+          // Serial.println(httpResponseCode);
         }
 
         http.end();
       } else {
-        Serial.println("WiFi desconectado! reconectando...");
+        // Serial.println("WiFi desconectado! reconectando...");
         WiFi.begin(ssid, password);
         while (WiFi.status() != WL_CONNECTED) {
           delay(3000);
-          Serial.println("Reconectando a WiFi...");
+          // Serial.println("Reconectando a WiFi...");
         }
-        Serial.println("WiFi reconectado");
+        // Serial.println("WiFi reconectado");
       }
       delay(3000);
     }
     else{
-      Serial.println("PIN_TRASMITIR NO HABILITA LA TRANSMISION DE DATOS");
+      // Serial.println("PIN_TRASMITIR NO HABILITA LA TRANSMISION DE DATOS");
       delay(200);
     }
 
