@@ -1,5 +1,6 @@
 #include "cred.h"
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <DHT.h>
 #include <OneWire.h>
@@ -50,6 +51,20 @@ DallasTemperature sensors(&oneWire);
 const int numIter = 10; 
 const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
+// ============================================================================
+// CONFIGURACIÓN PARA COMUNICACIÓN CON BACKEND (POLLING)
+// ============================================================================
+const char* djangoServer = "https://tinchofiuba.pythonanywhere.com";
+const char* consultarEndpoint = "/consultar-mensajes/";
+const char* confirmacionEndpoint = "/esp32-confirmacion/";
+
+// Variables para polling de mensajes
+unsigned long ultimaConsulta = 0;
+const unsigned long intervaloConsulta = 1000;  // Consultar cada 1 segundo
+
+// Cliente HTTPS seguro
+WiFiClientSecure secureClient;
+
 float tAguaArray[numIter];
 float tempAmbArray[numIter];
 float distanciaArray[numIter];
@@ -89,6 +104,149 @@ float leerAngulo() {
   delay(100);
 
 }
+
+// ============================================================================
+// FUNCIONES PARA COMUNICACIÓN CON BACKEND (POLLING)
+// ============================================================================
+
+// Mapear nombres del frontend a variables de estado del ESP32
+void controlarBomba(const char* bombaNombre, bool estado) {
+  Serial.print("🔧 Comando recibido: Bomba '");
+  Serial.print(bombaNombre);
+  Serial.print("' -> ");
+  Serial.println(estado ? "ON" : "OFF");
+  
+  // Por ahora solo imprimir, no controlar físicamente los pines
+  // TODO: Agregar control físico de pines aquí cuando esté listo
+  
+  if (strcmp(bombaNombre, "recirculado") == 0) {
+    Serial.println("  → Mapeado a: Bomba Principal (PIN_BOMBA_PPAL)");
+    // TODO: digitalWrite(PIN_BOMBA_PPAL, estado ? HIGH : LOW);
+    // TODO: bombaPpalEstado = estado;
+  }
+  else if (strcmp(bombaNombre, "solucionA") == 0) {
+    Serial.println("  → Mapeado a: Bomba A (PIN_BOMBA_A)");
+    // TODO: digitalWrite(PIN_BOMBA_A, estado ? HIGH : LOW);
+    // TODO: bombaAEstado = estado;
+  }
+  else if (strcmp(bombaNombre, "solucionB") == 0) {
+    Serial.println("  → Mapeado a: Bomba B (PIN_BOMBA_B)");
+    // TODO: digitalWrite(PIN_BOMBA_B, estado ? HIGH : LOW);
+    // TODO: bombaBEstado = estado;
+  }
+  else if (strcmp(bombaNombre, "micro") == 0) {
+    Serial.println("  → Mapeado a: Bomba Micro (PIN_BOMBA_micro)");
+    // TODO: digitalWrite(PIN_BOMBA_micro, estado ? HIGH : LOW);
+    // TODO: bombaMicroEstado = estado;
+  }
+  else if (strcmp(bombaNombre, "macro") == 0) {
+    Serial.println("  → Mapeado a: Bomba FE (PIN_BOMBA_FE)");
+    // TODO: digitalWrite(PIN_BOMBA_FE, estado ? HIGH : LOW);
+    // TODO: bombaFEEstado = estado;
+  }
+  else if (strcmp(bombaNombre, "llenado") == 0) {
+    Serial.println("  → Mapeado a: Bomba Agua Reserva (PIN_BOMBA_AGUA_RESERVA)");
+    // TODO: digitalWrite(PIN_BOMBA_AGUA_RESERVA, estado ? HIGH : LOW);
+    // TODO: bombaAguaReservaEstado = estado;
+  }
+  else {
+    Serial.print("  ⚠️ Bomba desconocida: ");
+    Serial.println(bombaNombre);
+  }
+}
+
+// Consultar mensajes pendientes en el backend
+void consultarMensajes() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+  
+  HTTPClient http;
+  String url = String(djangoServer) + String(consultarEndpoint);
+  
+  // Configurar cliente seguro para HTTPS
+  secureClient.setInsecure();  // Ignorar certificado SSL (solo para pruebas)
+  http.begin(secureClient, url);
+  
+  int httpResponseCode = http.GET();
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    
+    // Parsear JSON
+    StaticJsonDocument<200> doc;
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (!error) {
+      bool hayMensaje = doc["hay_mensaje"];
+      
+      if (hayMensaje) {
+        const char* bombaNombre = doc["bomba"];
+        bool estado = doc["estado"];
+        
+        Serial.println("✅ Mensaje recibido del backend!");
+        Serial.print("  Bomba: ");
+        Serial.println(bombaNombre);
+        Serial.print("  Estado: ");
+        Serial.println(estado ? "ON" : "OFF");
+        
+        // Controlar la bomba (por ahora solo Serial.println)
+        controlarBomba(bombaNombre, estado);
+        
+        // Enviar confirmación al backend
+        enviarConfirmacionAlBackend(bombaNombre, estado);
+      }
+    } else {
+      Serial.print("❌ Error parseando JSON: ");
+      Serial.println(error.c_str());
+    }
+  } else {
+    Serial.print("❌ Error en consulta: ");
+    Serial.println(httpResponseCode);
+  }
+  
+  http.end();
+}
+
+// Enviar confirmación al backend
+void enviarConfirmacionAlBackend(const char* bombaNombre, bool estado) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+  
+  HTTPClient http;
+  String url = String(djangoServer) + String(confirmacionEndpoint);
+  
+  // Configurar cliente seguro para HTTPS
+  secureClient.setInsecure();  // Ignorar certificado SSL (solo para pruebas)
+  http.begin(secureClient, url);
+  http.addHeader("Content-Type", "application/json");
+  
+  // Crear JSON con la información de la bomba
+  StaticJsonDocument<200> doc;
+  doc["bomba"] = bombaNombre;
+  doc["estado"] = estado;
+  doc["timestamp"] = millis();
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  Serial.print("📤 Enviando confirmación: ");
+  Serial.println(jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    Serial.print("✅ Confirmación enviada. Código: ");
+    Serial.println(httpResponseCode);
+  } else {
+    Serial.print("❌ Error enviando confirmación: ");
+    Serial.println(httpResponseCode);
+  }
+  
+  http.end();
+}
+
 
 
 void setup() {
@@ -135,11 +293,28 @@ void setup() {
     Serial.println("Conectando a WiFi...");
   }
   Serial.println("Conectado a WiFi");
+  Serial.print("📍 IP: ");
+  Serial.println(WiFi.localIP());
+  
+  // Configurar cliente seguro para HTTPS
+  secureClient.setInsecure();  // Ignorar certificado SSL (solo para pruebas)
+  Serial.println("🌐 Sistema de polling de mensajes activado (cada 1 segundo)");
   
 }
 
 void loop() {
+    // ========================================================================
+    // CONSULTAR MENSAJES DEL BACKEND (POLLING)
+    // ========================================================================
+    unsigned long tiempoActual = millis();
+    if (tiempoActual - ultimaConsulta >= intervaloConsulta) {
+      ultimaConsulta = tiempoActual;
+      consultarMensajes();
+    }
 
+    // ========================================================================
+    // LECTURA DE SENSORES (CÓDIGO ORIGINAL)
+    // ========================================================================
     for (int i = 0; i < numIter; i++) {
       sensors.requestTemperatures();
       tAguaArray[i] = sensors.getTempCByIndex(0);
