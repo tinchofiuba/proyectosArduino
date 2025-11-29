@@ -336,7 +336,7 @@ void setup() {
     "PollingBackend",         // Nombre de la tarea
     8192,                     // Stack size (bytes) - suficiente para HTTP
     NULL,                     // Parámetros
-    1,                        // Prioridad (1 = baja, 5 = alta)
+    2,                        // Prioridad mayor que la tarea loop() de Arduino
     NULL                      // Handle de la tarea (no necesario)
   );
   
