@@ -259,14 +259,15 @@ void enviarConfirmacionAlBackend(const char* bombaNombre, bool estado) {
 // ============================================================================
 void tareaPollingBackend(void *parameter) {
   Serial.println("🚀 Tarea de polling iniciada");
-  
-  while (true) {
-    // Consultar mensajes del backend cada 1 segundo
+
+  // Usamos vTaskDelayUntil para que el PERIODO total sea cercano a intervaloConsulta,
+  // compensando el tiempo que tarda consultarMensajes() (HTTP, parseo, etc.).
+  TickType_t lastWakeTime = xTaskGetTickCount();
+  const TickType_t periodTicks = pdMS_TO_TICKS(intervaloConsulta);
+
+  for (;;) {
     consultarMensajes();
-    
-    // Esperar 1 segundo antes de la próxima consulta
-    // vTaskDelay usa ticks, 1000ms / portTICK_PERIOD_MS = ticks
-    vTaskDelay(intervaloConsulta / portTICK_PERIOD_MS);
+    vTaskDelayUntil(&lastWakeTime, periodTicks);
   }
 }
 
@@ -450,4 +451,8 @@ void loop() {
     else{
       Serial.println("PIN_TRASMITIR NO HABILITA LA TRANSMISION DE DATOS");
       delay(200);
-    }}
+    }
+
+    // Ceder tiempo de CPU a otras tareas (por ejemplo, tarea de polling)
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+}
