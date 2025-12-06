@@ -1,7 +1,7 @@
 #include "cred.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <HTTPClient.h>
+#include <PubSubClient.h>
 #include <DHT.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -52,20 +52,13 @@ OneWire oneWire(DS18B20);
 DallasTemperature sensors(&oneWire);
 
 const int numIter = 10; 
-const char* serverName = "http://tinchofiuba.pythonanywhere.com/hidroponia/";
 
 // ============================================================================
-// CONFIGURACIÓN PARA COMUNICACIÓN CON BACKEND (POLLING)
+// CONFIGURACIÓN MQTT
 // ============================================================================
-const char* djangoServer = "https://tinchofiuba.pythonanywhere.com";
-const char* consultarEndpoint = "/consultar-mensajes/";
-const char* confirmacionEndpoint = "/esp32-confirmacion/";
-
-// Variables para polling de mensajes
-const unsigned long intervaloConsulta = 500;   // Consultar cada 0.5 segundos
-
-// Cliente HTTPS seguro
+// Cliente WiFi seguro para MQTT con TLS
 WiFiClientSecure secureClient;
+PubSubClient mqttClient(secureClient);
 
 // Semáforo para proteger variables compartidas (estados de bombas)
 SemaphoreHandle_t mutexBombas;
@@ -111,162 +104,37 @@ float leerAngulo() {
 }
 
 // ============================================================================
-// FUNCIONES PARA COMUNICACIÓN CON BACKEND (POLLING)
+// FUNCIONES MQTT
 // ============================================================================
 
-// Mapear nombres del frontend a variables de estado del ESP32
-void controlarBomba(const char* bombaNombre, bool estado) {
-  // Proteger acceso a variables compartidas
-  if (xSemaphoreTake(mutexBombas, portMAX_DELAY) == pdTRUE) {
-    // Serial.print("🔧 Comando recibido: Bomba '");
-    // Serial.print(bombaNombre);
-    // Serial.print("' -> ");
-    // Serial.println(estado ? "ON" : "OFF");
+// Reconectar a MQTT si se pierde la conexión
+void reconectarMQTT() {
+  while (!mqttClient.connected()) {
+    // Serial.print("🔄 Intentando conectar a MQTT...");
     
-    if (strcmp(bombaNombre, "recirculado") == 0) {
-      // Serial.println("  → Mapeado a: Bomba Principal (PIN_BOMBA_PPAL)");
-      digitalWrite(PIN_BOMBA_PPAL, estado ? HIGH : LOW);
-      bombaPpalEstado = estado;
-    }
-    else if (strcmp(bombaNombre, "solucionA") == 0) {
-      // Serial.println("  → Mapeado a: Bomba A (PIN_BOMBA_A)");
-      digitalWrite(PIN_BOMBA_A, estado ? HIGH : LOW);
-      bombaAEstado = estado;
-    }
-    else if (strcmp(bombaNombre, "solucionB") == 0) {
-      // Serial.println("  → Mapeado a: Bomba B (PIN_BOMBA_B)");
-      digitalWrite(PIN_BOMBA_B, estado ? HIGH : LOW);
-      bombaBEstado = estado;
-    }
-    else if (strcmp(bombaNombre, "micro") == 0) {
-      // Serial.println("  → Mapeado a: Bomba Micro (PIN_BOMBA_micro)");
-      digitalWrite(PIN_BOMBA_micro, estado ? HIGH : LOW);
-      bombaMicroEstado = estado;
-    }
-    else if (strcmp(bombaNombre, "macro") == 0) {
-      // Serial.println("  → Mapeado a: Bomba FE (PIN_BOMBA_FE)");
-      digitalWrite(PIN_BOMBA_FE, estado ? HIGH : LOW);
-      bombaFEEstado = estado;
-    }
-    else if (strcmp(bombaNombre, "llenado") == 0) {
-      // Serial.println("  → Mapeado a: Bomba Agua Reserva (PIN_BOMBA_AGUA_RESERVA)");
-      digitalWrite(PIN_BOMBA_AGUA_RESERVA, estado ? HIGH : LOW);
-      bombaAguaReservaEstado = estado;
-    }
-    else {
-      // Serial.print("  ⚠️ Bomba desconocida: ");
-      // Serial.println(bombaNombre);
-    }
-    
-    xSemaphoreGive(mutexBombas);
-  }
-}
-
-// Consultar mensajes pendientes en el backend
-void consultarMensajes() {
-  if (WiFi.status() != WL_CONNECTED) {
-    return;
-  }
-  
-  HTTPClient http;
-  String url = String(djangoServer) + String(consultarEndpoint);
-  
-  // Configurar cliente seguro para HTTPS
-  secureClient.setInsecure();  // Ignorar certificado SSL (solo para pruebas)
-  http.begin(secureClient, url);
-  
-  int httpResponseCode = http.GET();
-  
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    
-    // Parsear JSON
-    StaticJsonDocument<200> doc;
-    DeserializationError error = deserializeJson(doc, response);
-    
-    if (!error) {
-      bool hayMensaje = doc["hay_mensaje"];
-      
-      if (hayMensaje) {        
-        const char* bombaNombre = doc["bomba"];
-        bool estado = doc["estado"];
-        // Serial.println("✅ Mensaje recibido del backend!");
-        // Serial.print("  Bomba: ");
-        // Serial.println(bombaNombre);
-        // Serial.print("  Estado: ");
-        // Serial.println(estado ? "ON" : "OFF");
-        
-        // Controlar la bomba (por ahora solo Serial.println)
-        controlarBomba(bombaNombre, estado);
-        
-        // Enviar confirmación al backend
-        enviarConfirmacionAlBackend(bombaNombre, estado);
-      }
+    if (mqttClient.connect(mqttClientId, mqttUsername, mqttPassword)) {
+      // Serial.println("✅ Conectado a MQTT!");
     } else {
-      // Serial.print("❌ Error parseando JSON: ");
-      // Serial.println(error.c_str());
+      // Serial.print("❌ Falló conexión MQTT, código: ");
+      // Serial.print(mqttClient.state());
+      // Serial.println(". Reintentando en 5 segundos...");
+      delay(5000);
     }
-  } else {
-    // Serial.print("❌ Error en consulta: ");
-    // Serial.println(httpResponseCode);
   }
-  
-  http.end();
 }
 
-// Enviar confirmación al backend
-void enviarConfirmacionAlBackend(const char* bombaNombre, bool estado) {
-  if (WiFi.status() != WL_CONNECTED) {
-    return;
+// Enviar datos de sensores al topic MQTT
+void enviarDatosMQTT(String jsonString) {
+  if (!mqttClient.connected()) {
+    reconectarMQTT();
   }
   
-  HTTPClient http;
-  String url = String(djangoServer) + String(confirmacionEndpoint);
+  mqttClient.loop(); // Mantener conexión activa
   
-  // Configurar cliente seguro para HTTPS
-  secureClient.setInsecure();  // Ignorar certificado SSL (solo para pruebas)
-  http.begin(secureClient, url);
-  http.addHeader("Content-Type", "application/json");
-  
-  // Crear JSON con la información de la bomba
-  StaticJsonDocument<200> doc;
-  doc["bomba"] = bombaNombre;
-  doc["estado"] = estado;
-  doc["timestamp"] = millis();
-  
-  String jsonString;
-  serializeJson(doc, jsonString);
-  
-  // Serial.print("📤 Enviando confirmación: ");
-  // Serial.println(jsonString);
-  
-  int httpResponseCode = http.POST(jsonString);
-  
-  if (httpResponseCode > 0) {
-    // Serial.print("✅ Confirmación enviada. Código: ");
-    // Serial.println(httpResponseCode);
+  if (mqttClient.publish(mqttTopicSensores, jsonString.c_str())) {
+    // Serial.println("✅ Datos enviados a MQTT");
   } else {
-    // Serial.print("❌ Error enviando confirmación: ");
-    // Serial.println(httpResponseCode);
-  }
-  
-  http.end();
-}
-
-// ============================================================================
-// TAREA DE POLLING DEL BACKEND (FreeRTOS Task)
-// ============================================================================
-void tareaPollingBackend(void *parameter) {
-  // Serial.println("🚀 Tarea de polling iniciada");
-
-  // Usamos vTaskDelayUntil para que el PERIODO total sea cercano a intervaloConsulta,
-  // compensando el tiempo que tarda consultarMensajes() (HTTP, parseo, etc.).
-  TickType_t lastWakeTime = xTaskGetTickCount();
-  const TickType_t periodTicks = pdMS_TO_TICKS(intervaloConsulta);
-
-  for (;;) {
-    consultarMensajes();
-    vTaskDelayUntil(&lastWakeTime, periodTicks);
+    // Serial.println("❌ Error enviando datos a MQTT");
   }
 }
 
@@ -319,8 +187,14 @@ void setup() {
   // Serial.print("📍 IP: ");
   // Serial.println(WiFi.localIP());
   
-  // Configurar cliente seguro para HTTPS
+  // Configurar cliente seguro para MQTT con TLS
   secureClient.setInsecure();  // Ignorar certificado SSL (solo para pruebas)
+  
+  // Configurar cliente MQTT
+  mqttClient.setServer(mqttBrokerHost, mqttBrokerPort);
+  
+  // Conectar a MQTT
+  reconectarMQTT();
   
   // Crear semáforo mutex para proteger variables compartidas
   mutexBombas = xSemaphoreCreateMutex();
@@ -328,26 +202,14 @@ void setup() {
     // Serial.println("❌ Error creando semáforo mutex");
   }
   
-  // Crear tarea de polling del backend (multitarea)
-  // Parámetros: función, nombre, stack size, parámetros, prioridad, handle
-  xTaskCreate(
-    tareaPollingBackend,      // Función de la tarea
-    "PollingBackend",         // Nombre de la tarea
-    8192,                     // Stack size (bytes) - suficiente para HTTP
-    NULL,                     // Parámetros
-    2,                        // Prioridad mayor que la tarea loop() de Arduino
-    NULL                      // Handle de la tarea (no necesario)
-  );
-  
-  // Serial.println("🌐 Sistema de polling de mensajes activado en tarea separada (cada 1 segundo)");
-  // Serial.println("📊 Mediciones de sensores ejecutándose en tarea principal (sin bloqueo)");
+  // Serial.println("🌐 Sistema MQTT configurado");
+  // Serial.println("📊 Enviando datos al topic: hidroponia/sensores");
   
 }
 
 void loop() {
     // ========================================================================
-    // LECTURA DE SENSORES (EJECUTÁNDOSE EN TAREA PRINCIPAL)
-    // El polling del backend se ejecuta en una tarea separada (FreeRTOS)
+    // LECTURA DE SENSORES Y ENVÍO A MQTT
     // ========================================================================
     for (int i = 0; i < numIter; i++) {
       sensors.requestTemperatures();
@@ -420,22 +282,10 @@ void loop() {
 
       String jsonString;
       serializeJson(jsonDoc, jsonString);
+      
       if (WiFi.status() == WL_CONNECTED) {
-        HTTPClient http;
-        http.begin(serverName);
-        http.addHeader("Content-Type", "application/json");
-        int httpResponseCode = http.POST(jsonString);
-
-        if (httpResponseCode > 0) {
-          String response = http.getString();
-          // Serial.println(httpResponseCode);
-          // Serial.println(response);
-        } else {
-          // Serial.print("Error en la solicitud POST: ");
-          // Serial.println(httpResponseCode);
-        }
-
-        http.end();
+        // Enviar datos al topic MQTT
+        enviarDatosMQTT(jsonString);
       } else {
         // Serial.println("WiFi desconectado! reconectando...");
         WiFi.begin(ssid, password);
@@ -444,14 +294,22 @@ void loop() {
           // Serial.println("Reconectando a WiFi...");
         }
         // Serial.println("WiFi reconectado");
+        reconectarMQTT(); // Reconectar MQTT después de reconectar WiFi
       }
-      delay(3000);
+      
+      // Delay de 5 segundos entre envíos (emulando mediciones)
+      delay(5000);
     }
     else{
       // Serial.println("PIN_TRASMITIR NO HABILITA LA TRANSMISION DE DATOS");
       delay(200);
     }
 
-    // Ceder tiempo de CPU a otras tareas (por ejemplo, tarea de polling)
+    // Mantener conexión MQTT activa
+    if (mqttClient.connected()) {
+      mqttClient.loop();
+    }
+    
+    // Ceder tiempo de CPU a otras tareas
     vTaskDelay(10 / portTICK_PERIOD_MS);
 }
