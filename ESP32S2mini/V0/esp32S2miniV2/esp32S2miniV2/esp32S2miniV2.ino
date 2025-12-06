@@ -313,3 +313,4 @@ void loop() {
     // Ceder tiempo de CPU a otras tareas
     vTaskDelay(10 / portTICK_PERIOD_MS);
 }
+
