@@ -1,6 +1,5 @@
 #include "cred.h"
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <OneWire.h>
@@ -54,11 +53,16 @@ DallasTemperature sensors(&oneWire);
 const int numIter = 10; 
 
 // ============================================================================
-// CONFIGURACIÓN MQTT
+// CONFIGURACIÓN MQTT - Mosquitto público
 // ============================================================================
-// Cliente WiFi seguro para MQTT con TLS
-WiFiClientSecure secureClient;
-PubSubClient mqttClient(secureClient);
+const char* mqttBrokerHost = "test.mosquitto.org";
+const int mqttBrokerPort = 1883;
+const char* mqttTopicSensores = "hidroponia/sensores";
+const char* mqttClientId = "esp32s2mini_hidroponia";
+
+// Cliente WiFi y MQTT (sin TLS para Mosquitto público)
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
 
 // Semáforo para proteger variables compartidas (estados de bombas)
 SemaphoreHandle_t mutexBombas;
@@ -109,31 +113,66 @@ float leerAngulo() {
 
 // Reconectar a MQTT si se pierde la conexión
 void reconectarMQTT() {
+  // Verificar WiFi primero
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[MQTT] ⚠️ WiFi desconectado, no se puede reconectar MQTT");
+    return;
+  }
+  
   int intentos = 0;
-  while (!mqttClient.connected() && intentos < 3) {
-    Serial.print("[MQTT] Intentando conectar... (intento ");
+  while (!mqttClient.connected() && intentos < 5) {
+    Serial.print("[MQTT] Intentando reconectar... (intento ");
     Serial.print(intentos + 1);
-    Serial.println(")");
+    Serial.print("/5)");
+    Serial.print(" | Broker: ");
+    Serial.print(mqttBrokerHost);
+    Serial.print(":");
+    Serial.println(mqttBrokerPort);
     
-    if (mqttClient.connect(mqttClientId, mqttUsername, mqttPassword)) {
+    if (mqttClient.connect(mqttClientId)) {
       Serial.println("[MQTT] ✅ Reconectado exitosamente");
+      Serial.print("[MQTT] Topic: ");
+      Serial.println(mqttTopicSensores);
       return;
     } else {
+      int estado = mqttClient.state();
       Serial.print("[MQTT] ❌ Error de conexión, código: ");
-      Serial.println(mqttClient.state());
+      Serial.print(estado);
+      Serial.print(" (");
+      // Explicar el código de error
+      switch(estado) {
+        case -4: Serial.print("MQTT_CONNECTION_TIMEOUT"); break;
+        case -3: Serial.print("MQTT_CONNECTION_LOST"); break;
+        case -2: Serial.print("MQTT_CONNECT_FAILED"); break;
+        case -1: Serial.print("MQTT_DISCONNECTED"); break;
+        case 1: Serial.print("MQTT_CONNECT_BAD_PROTOCOL"); break;
+        case 2: Serial.print("MQTT_CONNECT_BAD_CLIENT_ID"); break;
+        case 3: Serial.print("MQTT_CONNECT_UNAVAILABLE"); break;
+        case 4: Serial.print("MQTT_CONNECT_BAD_CREDENTIALS"); break;
+        case 5: Serial.print("MQTT_CONNECT_UNAUTHORIZED"); break;
+        default: Serial.print("Desconocido"); break;
+      }
+      Serial.println(")");
       intentos++;
       delay(2000);
     }
   }
-  // Si no se conecta después de 3 intentos, continuar sin MQTT
-  Serial.println("[MQTT] ⚠️ No se pudo reconectar después de 3 intentos");
+  // Si no se conecta después de 5 intentos, continuar sin MQTT
+  Serial.println("[MQTT] ⚠️ No se pudo reconectar después de 5 intentos");
 }
 
 // Enviar datos de sensores al topic MQTT
 void enviarDatosMQTT(String jsonString) {
-  // Verificar y mantener conexión
-  mqttClient.loop(); // Mantener conexión activa
+  // Verificar WiFi primero
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[MQTT] ❌ WiFi desconectado, no se pueden enviar datos");
+    return;
+  }
   
+  // Mantener conexión MQTT activa
+  mqttClient.loop();
+  
+  // Verificar conexión MQTT
   if (!mqttClient.connected()) {
     Serial.println("[MQTT] ⚠️ Cliente desconectado, intentando reconectar...");
     reconectarMQTT();
@@ -146,7 +185,11 @@ void enviarDatosMQTT(String jsonString) {
     }
   }
   
-  Serial.print("Se va a enviar esto: ");
+  // Log del mensaje a enviar
+  Serial.println("[MQTT] 📤 Publicando datos...");
+  Serial.print("[MQTT] Topic: ");
+  Serial.println(mqttTopicSensores);
+  Serial.print("[MQTT] Payload: ");
   Serial.println(jsonString);
   
   // Intentar publicar
@@ -234,11 +277,7 @@ void setup() {
   }
   
   Serial.println("2. Configurando MQTT...");
-  // Configurar cliente seguro para MQTT con TLS
-  secureClient.setInsecure();  // Ignorar certificado SSL (solo para pruebas)
-  secureClient.setTimeout(10);  // Timeout de 10 segundos
-  
-  // Configurar cliente MQTT
+  // Configurar cliente MQTT (sin TLS para Mosquitto público)
   mqttClient.setServer(mqttBrokerHost, mqttBrokerPort);
   mqttClient.setBufferSize(2048);  // Buffer más grande para mensajes JSON
   mqttClient.setKeepAlive(60);     // Keepalive de 60 segundos
@@ -258,7 +297,7 @@ void setup() {
     Serial.print(intentosMQTT + 1);
     Serial.println(" de conexión...");
     
-    if (mqttClient.connect(mqttClientId, mqttUsername, mqttPassword)) {
+    if (mqttClient.connect(mqttClientId)) {
       Serial.println("   ✅ MQTT conectado!");
       Serial.print("   Estado: ");
       Serial.println(mqttClient.state());
@@ -372,28 +411,39 @@ void loop() {
     //TODO LO QUE VIENE ABAJO LO HAGO SI EL PIN_TRASMITIR ESTA LOW
     // Serial.print("transmitirEstado: "); Serial.println(transmitirEstado);
     if (transmitirEstado == LOW) {
-
       String jsonString;
       serializeJson(jsonDoc, jsonString);
       
-      if (WiFi.status() == WL_CONNECTED) {
-        // Enviar datos al topic MQTT
-        enviarDatosMQTT(jsonString);
-      } else {
+      // Verificar WiFi
+      if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[WiFi] ❌ Desconectado, reconectando...");
         WiFi.begin(ssid, password);
         int intentosReconexion = 0;
-        while (WiFi.status() != WL_CONNECTED) {
+        while (WiFi.status() != WL_CONNECTED && intentosReconexion < 5) {
           delay(3000);
           intentosReconexion++;
-          if (intentosReconexion > 5) {
-            Serial.println("[WiFi] ❌ Error: No se pudo reconectar");
-            break;
-          }
+          Serial.print("[WiFi] Intentando reconectar... (");
+          Serial.print(intentosReconexion);
+          Serial.println("/5)");
         }
         if (WiFi.status() == WL_CONNECTED) {
+          Serial.println("[WiFi] ✅ Reconectado exitosamente");
           reconectarMQTT(); // Reconectar MQTT después de reconectar WiFi
+        } else {
+          Serial.println("[WiFi] ❌ Error: No se pudo reconectar");
         }
+      }
+      
+      // Si WiFi está conectado, intentar enviar por MQTT
+      if (WiFi.status() == WL_CONNECTED) {
+        // Verificar conexión MQTT antes de enviar
+        if (!mqttClient.connected()) {
+          Serial.println("[MQTT] ⚠️ Desconectado, intentando reconectar...");
+          reconectarMQTT();
+        }
+        
+        // Enviar datos al topic MQTT
+        enviarDatosMQTT(jsonString);
       }
       
       // Delay de 5 segundos entre envíos (emulando mediciones)
@@ -404,8 +454,11 @@ void loop() {
       delay(200);
     }
 
-    // Mantener conexión MQTT activa (llamar frecuentemente)
-    mqttClient.loop();
+    // Mantener conexión MQTT activa siempre (llamar frecuentemente)
+    // Esto es importante para mantener la conexión viva
+    if (WiFi.status() == WL_CONNECTED) {
+      mqttClient.loop();
+    }
     
     // Ceder tiempo de CPU a otras tareas
     vTaskDelay(10 / portTICK_PERIOD_MS);
