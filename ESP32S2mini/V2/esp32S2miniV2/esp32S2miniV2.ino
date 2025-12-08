@@ -476,24 +476,6 @@ void loop() {
     byte lEstado = digitalRead(L);
     byte llEstado = digitalRead(LL);
 
-    // Serial.println("=== SENSORES ===");
-    // Serial.print("Temperatura agua: "); Serial.println(tAguaArray[0]);
-    // Serial.print("Distancia: "); Serial.println(distanciaArray[0]);
-    // Serial.print("HH: "); Serial.println(hhEstado ? "encontacto" : "libre");
-    // Serial.print("H: "); Serial.println(hEstado ? "encontacto" : "libre");
-    // Serial.print("L: "); Serial.println(lEstado ? "encontacto" : "libre");
-    // Serial.print("LL: "); Serial.println(llEstado ? "encontacto" : "libre");
-    // Serial.print("TDS: "); Serial.println(conductividadArray[0]);
-    // Serial.print("pH: "); Serial.println(phArray[0]);
-    // Serial.print("Bomba ppal: "); Serial.println(bombaPpalEstado ? "ON" : "OFF");
-    // Serial.print("Bomba A: "); Serial.println(bombaAEstado ? "ON" : "OFF");
-    // Serial.print("Bomba B: "); Serial.println(bombaBEstado ? "ON" : "OFF");
-    // Serial.print("Bomba micro: "); Serial.println(bombaMicroEstado ? "ON" : "OFF");
-    // Serial.print("Bomba FE: "); Serial.println(bombaFEEstado ? "ON" : "OFF");
-    // Serial.print("Bomba agua reserva: "); Serial.println(bombaAguaReservaEstado ? "ON" : "OFF");
-    // Serial.print("Transmitir: "); Serial.println(transmitirEstado);
-    // Serial.println("=== FIN ===");
-
 
 
     jsonDoc["HH"] = hhEstado;
@@ -501,16 +483,14 @@ void loop() {
     jsonDoc["L"] = lEstado;
     jsonDoc["LL"] = llEstado;
 
-    // Proteger lectura de variables compartidas de bombas
-    if (xSemaphoreTake(mutexBombas, portMAX_DELAY) == pdTRUE) {
-      jsonDoc["bomba_ppal"] = bombaPpalEstado;
-      jsonDoc["bombaA"] = bombaAEstado;
-      jsonDoc["bombaB"] = bombaBEstado;
-      jsonDoc["bombaMicro"] = bombaMicroEstado;
-      jsonDoc["bombaFE"] = bombaFEEstado;
-      jsonDoc["bombaAguaReserva"] = bombaAguaReservaEstado;
-      xSemaphoreGive(mutexBombas);
-    }
+    // Leer estados reales de los pines físicos de las bombas
+    // Esto refleja el estado real del hardware, independientemente de cómo se haya cambiado
+    jsonDoc["bomba_ppal"] = (digitalRead(PIN_BOMBA_PPAL) == HIGH);
+    jsonDoc["bombaA"] = (digitalRead(PIN_BOMBA_A) == HIGH);
+    jsonDoc["bombaB"] = (digitalRead(PIN_BOMBA_B) == HIGH);
+    jsonDoc["bombaMicro"] = (digitalRead(PIN_BOMBA_micro) == HIGH);
+    jsonDoc["bombaFE"] = (digitalRead(PIN_BOMBA_FE) == HIGH);
+    jsonDoc["bombaAguaReserva"] = (digitalRead(PIN_BOMBA_AGUA_RESERVA) == HIGH);
 
     //TODO LO QUE VIENE ABAJO LO HAGO SI EL PIN_TRASMITIR ESTA LOW
     // Serial.print("transmitirEstado: "); Serial.println(transmitirEstado);
