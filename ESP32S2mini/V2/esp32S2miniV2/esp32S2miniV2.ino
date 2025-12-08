@@ -58,6 +58,7 @@ const int numIter = 10;
 const char* mqttBrokerHost = "test.mosquitto.org";
 const int mqttBrokerPort = 1883;
 const char* mqttTopicSensores = "hidroponia/sensores";
+const char* mqttTopicComandos = "hidroponia/estadoBombas";
 const char* mqttClientId = "esp32s2mini_hidroponia";
 
 // Cliente WiFi y MQTT (sin TLS para Mosquitto público)
@@ -111,6 +112,93 @@ float leerAngulo() {
 // FUNCIONES MQTT
 // ============================================================================
 
+// Callback para recibir mensajes MQTT
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  // Convertir payload a string
+  String message = "";
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  
+  Serial.print("[MQTT] 📨 Mensaje recibido en topic: ");
+  Serial.println(topic);
+  Serial.print("[MQTT] Payload: ");
+  Serial.println(message);
+  
+  // Verificar si es el topic de comandos de bombas
+  if (String(topic) == mqttTopicComandos) {
+    procesarComandoBomba(message);
+  }
+}
+
+// Procesar comando de bomba recibido por MQTT
+void procesarComandoBomba(String jsonString) {
+  // Parsear JSON (usando ArduinoJson)
+  StaticJsonDocument<200> doc;
+  DeserializationError error = deserializeJson(doc, jsonString);
+  
+  if (error) {
+    Serial.print("[MQTT] ❌ Error parseando JSON: ");
+    Serial.println(error.c_str());
+    return;
+  }
+  
+  // Obtener nombre de bomba y estado
+  const char* bomba = doc["bomba"];
+  bool estado = doc["estado"];
+  
+  if (bomba == NULL) {
+    Serial.println("[MQTT] ❌ Comando inválido: falta campo 'bomba'");
+    return;
+  }
+  
+  Serial.print("[MQTT] 🎛️ Comando recibido: ");
+  Serial.print(bomba);
+  Serial.print(" = ");
+  Serial.println(estado ? "ON" : "OFF");
+  
+  // Proteger acceso a variables compartidas de bombas
+  if (xSemaphoreTake(mutexBombas, portMAX_DELAY) == pdTRUE) {
+    // Mapear nombre de bomba a variable y pin correspondiente
+    if (strcmp(bomba, "bomba_ppal") == 0) {
+      bombaPpalEstado = estado;
+      digitalWrite(PIN_BOMBA_PPAL, estado ? HIGH : LOW);
+      Serial.println("[MQTT] ✅ Bomba principal actualizada");
+    }
+    else if (strcmp(bomba, "bombaA") == 0) {
+      bombaAEstado = estado;
+      digitalWrite(PIN_BOMBA_A, estado ? HIGH : LOW);
+      Serial.println("[MQTT] ✅ Bomba A actualizada");
+    }
+    else if (strcmp(bomba, "bombaB") == 0) {
+      bombaBEstado = estado;
+      digitalWrite(PIN_BOMBA_B, estado ? HIGH : LOW);
+      Serial.println("[MQTT] ✅ Bomba B actualizada");
+    }
+    else if (strcmp(bomba, "bombaMicro") == 0) {
+      bombaMicroEstado = estado;
+      digitalWrite(PIN_BOMBA_micro, estado ? HIGH : LOW);
+      Serial.println("[MQTT] ✅ Bomba Micro actualizada");
+    }
+    else if (strcmp(bomba, "bombaFE") == 0) {
+      bombaFEEstado = estado;
+      digitalWrite(PIN_BOMBA_FE, estado ? HIGH : LOW);
+      Serial.println("[MQTT] ✅ Bomba FE actualizada");
+    }
+    else if (strcmp(bomba, "bombaAguaReserva") == 0) {
+      bombaAguaReservaEstado = estado;
+      digitalWrite(PIN_BOMBA_AGUA_RESERVA, estado ? HIGH : LOW);
+      Serial.println("[MQTT] ✅ Bomba Agua Reserva actualizada");
+    }
+    else {
+      Serial.print("[MQTT] ⚠️ Bomba desconocida: ");
+      Serial.println(bomba);
+    }
+    
+    xSemaphoreGive(mutexBombas);
+  }
+}
+
 // Reconectar a MQTT si se pierde la conexión
 void reconectarMQTT() {
   // Verificar WiFi primero
@@ -131,8 +219,14 @@ void reconectarMQTT() {
     
     if (mqttClient.connect(mqttClientId)) {
       Serial.println("[MQTT] ✅ Reconectado exitosamente");
-      Serial.print("[MQTT] Topic: ");
+      Serial.print("[MQTT] Topic sensores: ");
       Serial.println(mqttTopicSensores);
+      
+      // Re-suscribirse al topic de comandos
+      if (mqttClient.subscribe(mqttTopicComandos, 1)) {
+        Serial.print("[MQTT] ✅ Re-suscrito a comandos: ");
+        Serial.println(mqttTopicComandos);
+      }
       return;
     } else {
       int estado = mqttClient.state();
@@ -281,6 +375,7 @@ void setup() {
   mqttClient.setServer(mqttBrokerHost, mqttBrokerPort);
   mqttClient.setBufferSize(2048);  // Buffer más grande para mensajes JSON
   mqttClient.setKeepAlive(60);     // Keepalive de 60 segundos
+  mqttClient.setCallback(mqttCallback);  // Callback para recibir mensajes
   
   Serial.println("3. Conectando a MQTT...");
   Serial.print("   Broker: ");
@@ -301,6 +396,15 @@ void setup() {
       Serial.println("   ✅ MQTT conectado!");
       Serial.print("   Estado: ");
       Serial.println(mqttClient.state());
+      
+      // Suscribirse al topic de comandos de bombas
+      if (mqttClient.subscribe(mqttTopicComandos, 1)) {
+        Serial.print("   ✅ Suscrito a comandos: ");
+        Serial.println(mqttTopicComandos);
+      } else {
+        Serial.print("   ⚠️ Error suscribiéndose a: ");
+        Serial.println(mqttTopicComandos);
+      }
     } else {
       Serial.print("[MQTT] ❌ Error de conexión, código: ");
       int estado = mqttClient.state();
