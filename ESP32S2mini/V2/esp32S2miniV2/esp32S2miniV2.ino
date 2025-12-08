@@ -1,5 +1,6 @@
 #include "cred.h"
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <OneWire.h>
