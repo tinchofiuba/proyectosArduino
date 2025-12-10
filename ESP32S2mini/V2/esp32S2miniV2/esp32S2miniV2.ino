@@ -598,7 +598,7 @@ void loop() {
       }
       
       // Delay de 5 segundos entre envíos (emulando mediciones)
-      delay(2000);
+      delay(5000);
     }
     else{
       // Serial.println("PIN_TRASMITIR NO HABILITA LA TRANSMISION DE DATOS");
