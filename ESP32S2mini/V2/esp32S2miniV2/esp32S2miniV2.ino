@@ -58,8 +58,9 @@ const int numIter = 10;
 // ============================================================================
 const char* mqttBrokerHost = "test.mosquitto.org";
 const int mqttBrokerPort = 1883;
-const char* mqttTopicSensores = "hidroponia/sensores";
-const char* mqttTopicComandos = "hidroponia/estadoBombas";
+const char* mqttTopicSensores = "hidroponia/sensores";           // Datos periódicos completos (no urgente)
+const char* mqttTopicComandos = "hidroponia/estadoBombas";        // Recibe comandos
+const char* mqttTopicConfirmacion = "hidroponia/confirmacion";    // Confirmación rápida (solo estados bombas)
 const char* mqttClientId = "esp32s2mini_hidroponia";
 
 // Cliente WiFi y MQTT (sin TLS para Mosquitto público)
@@ -68,6 +69,9 @@ PubSubClient mqttClient(wifiClient);
 
 // Semáforo para proteger variables compartidas (estados de bombas)
 SemaphoreHandle_t mutexBombas;
+
+// Variable global para medir tiempo de procesamiento de comandos
+unsigned long tiempoInicioComando = 0;
 
 float tAguaArray[numIter];
 float tempAmbArray[numIter];
@@ -105,13 +109,57 @@ float leerAngulo() {
   {
     return 3.1416; //error de lectura I2C
   }
-  delay(100);
+  // delay(100); // ELIMINADO: Causa demora innecesaria de 1 segundo (10 iteraciones × 100ms)
 
 }
 
 // ============================================================================
 // FUNCIONES MQTT
 // ============================================================================
+
+// Enviar confirmación inmediata de comando recibido
+// LAZO RÁPIDO: Publica solo estados de bombas al topic de confirmación (sin sensores)
+// Esto es para respuesta inmediata al frontend, no para registro completo
+void enviarConfirmacionBomba(const char* bomba, bool estado) {
+  if (!mqttClient.connected()) {
+    return; // No enviar si no hay conexión
+  }
+  
+  // Proteger acceso a variables compartidas
+  if (xSemaphoreTake(mutexBombas, portMAX_DELAY) == pdTRUE) {
+    // JSON ligero solo con estados de bombas (confirmación rápida)
+    StaticJsonDocument<300> confirmDoc;
+    
+    // Leer estados reales de los pines físicos (solo bombas, sin sensores)
+    confirmDoc["bomba_ppal"] = (digitalRead(PIN_BOMBA_PPAL) == HIGH);
+    confirmDoc["bombaA"] = (digitalRead(PIN_BOMBA_A) == HIGH);
+    confirmDoc["bombaB"] = (digitalRead(PIN_BOMBA_B) == HIGH);
+    confirmDoc["bombaMicro"] = (digitalRead(PIN_BOMBA_micro) == HIGH);
+    confirmDoc["bombaFE"] = (digitalRead(PIN_BOMBA_FE) == HIGH);
+    confirmDoc["bombaAguaReserva"] = (digitalRead(PIN_BOMBA_AGUA_RESERVA) == HIGH);
+    
+    // Timestamp para referencia
+    confirmDoc["timestamp"] = millis();
+    
+    String confirmJson;
+    serializeJson(confirmDoc, confirmJson);
+    
+    // Publicar al topic de confirmación (lazo rápido, no al topic de sensores)
+    bool publicado = mqttClient.publish(mqttTopicConfirmacion, confirmJson.c_str());
+    
+    // Calcular tiempo transcurrido y mostrar
+    if (publicado && tiempoInicioComando > 0) {
+      unsigned long tiempoFin = millis();
+      unsigned long tiempoTranscurrido = tiempoFin - tiempoInicioComando;
+      Serial.print("[TIMING] ⏱️ Tiempo total: ");
+      Serial.print(tiempoTranscurrido);
+      Serial.println(" ms");
+      tiempoInicioComando = 0; // Resetear para próximo comando
+    }
+    
+    xSemaphoreGive(mutexBombas);
+  }
+}
 
 // Callback para recibir mensajes MQTT
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -121,10 +169,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     message += (char)payload[i];
   }
   
-  Serial.print("[MQTT] 📨 Mensaje recibido en topic: ");
-  Serial.println(topic);
-  Serial.print("[MQTT] Payload: ");
-  Serial.println(message);
+  // Serial.print("[MQTT] 📨 Mensaje recibido en topic: ");
+  // Serial.println(topic);
+  // Serial.print("[MQTT] Payload: ");
+  // Serial.println(message);
   
   // Verificar si es el topic de comandos de bombas
   if (String(topic) == mqttTopicComandos) {
@@ -134,13 +182,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
 // Procesar comando de bomba recibido por MQTT
 void procesarComandoBomba(String jsonString) {
+  // TIMESTAMP: Inicio de procesamiento del comando
+  tiempoInicioComando = millis();
+  Serial.print("[TIMING] 🕐 Comando recibido en: ");
+  Serial.println(tiempoInicioComando);
+  
   // Parsear JSON (usando ArduinoJson)
   StaticJsonDocument<200> doc;
   DeserializationError error = deserializeJson(doc, jsonString);
   
   if (error) {
-    Serial.print("[MQTT] ❌ Error parseando JSON: ");
-    Serial.println(error.c_str());
+    tiempoInicioComando = 0; // Resetear si hay error
     return;
   }
   
@@ -149,54 +201,54 @@ void procesarComandoBomba(String jsonString) {
   bool estado = doc["estado"];
   
   if (bomba == NULL) {
-    Serial.println("[MQTT] ❌ Comando inválido: falta campo 'bomba'");
+    tiempoInicioComando = 0; // Resetear si hay error
     return;
   }
   
-  Serial.print("[MQTT] 🎛️ Comando recibido: ");
-  Serial.print(bomba);
-  Serial.print(" = ");
-  Serial.println(estado ? "ON" : "OFF");
-  
   // Proteger acceso a variables compartidas de bombas
   if (xSemaphoreTake(mutexBombas, portMAX_DELAY) == pdTRUE) {
+    bool comandoAplicado = false;
+    
     // Mapear nombre de bomba a variable y pin correspondiente
     if (strcmp(bomba, "bomba_ppal") == 0) {
       bombaPpalEstado = estado;
       digitalWrite(PIN_BOMBA_PPAL, estado ? HIGH : LOW);
-      Serial.println("[MQTT] ✅ Bomba principal actualizada");
+      comandoAplicado = true;
     }
     else if (strcmp(bomba, "bombaA") == 0) {
       bombaAEstado = estado;
       digitalWrite(PIN_BOMBA_A, estado ? HIGH : LOW);
-      Serial.println("[MQTT] ✅ Bomba A actualizada");
+      comandoAplicado = true;
     }
     else if (strcmp(bomba, "bombaB") == 0) {
       bombaBEstado = estado;
       digitalWrite(PIN_BOMBA_B, estado ? HIGH : LOW);
-      Serial.println("[MQTT] ✅ Bomba B actualizada");
+      comandoAplicado = true;
     }
     else if (strcmp(bomba, "bombaMicro") == 0) {
       bombaMicroEstado = estado;
       digitalWrite(PIN_BOMBA_micro, estado ? HIGH : LOW);
-      Serial.println("[MQTT] ✅ Bomba Micro actualizada");
+      comandoAplicado = true;
     }
     else if (strcmp(bomba, "bombaFE") == 0) {
       bombaFEEstado = estado;
       digitalWrite(PIN_BOMBA_FE, estado ? HIGH : LOW);
-      Serial.println("[MQTT] ✅ Bomba FE actualizada");
+      comandoAplicado = true;
     }
     else if (strcmp(bomba, "bombaAguaReserva") == 0) {
       bombaAguaReservaEstado = estado;
       digitalWrite(PIN_BOMBA_AGUA_RESERVA, estado ? HIGH : LOW);
-      Serial.println("[MQTT] ✅ Bomba Agua Reserva actualizada");
-    }
-    else {
-      Serial.print("[MQTT] ⚠️ Bomba desconocida: ");
-      Serial.println(bomba);
+      comandoAplicado = true;
     }
     
     xSemaphoreGive(mutexBombas);
+    
+    // Enviar confirmación inmediata si el comando fue aplicado
+    if (comandoAplicado) {
+      enviarConfirmacionBomba(bomba, estado);
+    } else {
+      tiempoInicioComando = 0; // Resetear si no se aplicó
+    }
   }
 }
 
@@ -204,63 +256,63 @@ void procesarComandoBomba(String jsonString) {
 void reconectarMQTT() {
   // Verificar WiFi primero
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[MQTT] ⚠️ WiFi desconectado, no se puede reconectar MQTT");
+    // Serial.println("[MQTT] ⚠️ WiFi desconectado, no se puede reconectar MQTT");
     return;
   }
   
   int intentos = 0;
   while (!mqttClient.connected() && intentos < 5) {
-    Serial.print("[MQTT] Intentando reconectar... (intento ");
-    Serial.print(intentos + 1);
-    Serial.print("/5)");
-    Serial.print(" | Broker: ");
-    Serial.print(mqttBrokerHost);
-    Serial.print(":");
-    Serial.println(mqttBrokerPort);
+    // Serial.print("[MQTT] Intentando reconectar... (intento ");
+    // Serial.print(intentos + 1);
+    // Serial.print("/5)");
+    // Serial.print(" | Broker: ");
+    // Serial.print(mqttBrokerHost);
+    // Serial.print(":");
+    // Serial.println(mqttBrokerPort);
     
     if (mqttClient.connect(mqttClientId)) {
-      Serial.println("[MQTT] ✅ Reconectado exitosamente");
-      Serial.print("[MQTT] Topic sensores: ");
-      Serial.println(mqttTopicSensores);
+      // Serial.println("[MQTT] ✅ Reconectado exitosamente");
+      // Serial.print("[MQTT] Topic sensores: ");
+      // Serial.println(mqttTopicSensores);
       
       // Re-suscribirse al topic de comandos
       if (mqttClient.subscribe(mqttTopicComandos, 1)) {
-        Serial.print("[MQTT] ✅ Re-suscrito a comandos: ");
-        Serial.println(mqttTopicComandos);
+        // Serial.print("[MQTT] ✅ Re-suscrito a comandos: ");
+        // Serial.println(mqttTopicComandos);
       }
       return;
     } else {
-      int estado = mqttClient.state();
-      Serial.print("[MQTT] ❌ Error de conexión, código: ");
-      Serial.print(estado);
-      Serial.print(" (");
-      // Explicar el código de error
-      switch(estado) {
-        case -4: Serial.print("MQTT_CONNECTION_TIMEOUT"); break;
-        case -3: Serial.print("MQTT_CONNECTION_LOST"); break;
-        case -2: Serial.print("MQTT_CONNECT_FAILED"); break;
-        case -1: Serial.print("MQTT_DISCONNECTED"); break;
-        case 1: Serial.print("MQTT_CONNECT_BAD_PROTOCOL"); break;
-        case 2: Serial.print("MQTT_CONNECT_BAD_CLIENT_ID"); break;
-        case 3: Serial.print("MQTT_CONNECT_UNAVAILABLE"); break;
-        case 4: Serial.print("MQTT_CONNECT_BAD_CREDENTIALS"); break;
-        case 5: Serial.print("MQTT_CONNECT_UNAUTHORIZED"); break;
-        default: Serial.print("Desconocido"); break;
-      }
-      Serial.println(")");
+      // int estado = mqttClient.state();
+      // Serial.print("[MQTT] ❌ Error de conexión, código: ");
+      // Serial.print(estado);
+      // Serial.print(" (");
+      // // Explicar el código de error
+      // switch(estado) {
+      //   case -4: Serial.print("MQTT_CONNECTION_TIMEOUT"); break;
+      //   case -3: Serial.print("MQTT_CONNECTION_LOST"); break;
+      //   case -2: Serial.print("MQTT_CONNECT_FAILED"); break;
+      //   case -1: Serial.print("MQTT_DISCONNECTED"); break;
+      //   case 1: Serial.print("MQTT_CONNECT_BAD_PROTOCOL"); break;
+      //   case 2: Serial.print("MQTT_CONNECT_BAD_CLIENT_ID"); break;
+      //   case 3: Serial.print("MQTT_CONNECT_UNAVAILABLE"); break;
+      //   case 4: Serial.print("MQTT_CONNECT_BAD_CREDENTIALS"); break;
+      //   case 5: Serial.print("MQTT_CONNECT_UNAUTHORIZED"); break;
+      //   default: Serial.print("Desconocido"); break;
+      // }
+      // Serial.println(")");
       intentos++;
       delay(2000);
     }
   }
   // Si no se conecta después de 5 intentos, continuar sin MQTT
-  Serial.println("[MQTT] ⚠️ No se pudo reconectar después de 5 intentos");
+  // Serial.println("[MQTT] ⚠️ No se pudo reconectar después de 5 intentos");
 }
 
 // Enviar datos de sensores al topic MQTT
 void enviarDatosMQTT(String jsonString) {
   // Verificar WiFi primero
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[MQTT] ❌ WiFi desconectado, no se pueden enviar datos");
+    // Serial.println("[MQTT] ❌ WiFi desconectado, no se pueden enviar datos");
     return;
   }
   
@@ -269,35 +321,35 @@ void enviarDatosMQTT(String jsonString) {
   
   // Verificar conexión MQTT
   if (!mqttClient.connected()) {
-    Serial.println("[MQTT] ⚠️ Cliente desconectado, intentando reconectar...");
+    // Serial.println("[MQTT] ⚠️ Cliente desconectado, intentando reconectar...");
     reconectarMQTT();
     
     // Verificar nuevamente después de intentar reconectar
     if (!mqttClient.connected()) {
-      Serial.print("[MQTT] ❌ No se pudo reconectar. Estado: ");
-      Serial.println(mqttClient.state());
+      // Serial.print("[MQTT] ❌ No se pudo reconectar. Estado: ");
+      // Serial.println(mqttClient.state());
       return; // Salir si no está conectado
     }
   }
   
-  // Log del mensaje a enviar
-  Serial.println("[MQTT] 📤 Publicando datos...");
-  Serial.print("[MQTT] Topic: ");
-  Serial.println(mqttTopicSensores);
+  // Log del mensaje a enviar (SOLO ESTE SE MANTIENE)
+  // Serial.println("[MQTT] 📤 Publicando datos...");
+  // Serial.print("[MQTT] Topic: ");
+  // Serial.println(mqttTopicSensores);
   Serial.print("[MQTT] Payload: ");
   Serial.println(jsonString);
   
   // Intentar publicar
   bool publicado = mqttClient.publish(mqttTopicSensores, jsonString.c_str());
   
-  if (!publicado) {
-    Serial.print("[MQTT] ❌ Error enviando datos. Estado: ");
-    Serial.print(mqttClient.state());
-    Serial.print(" | Conectado: ");
-    Serial.println(mqttClient.connected() ? "Sí" : "No");
-  } else {
-    Serial.println("[MQTT] ✅ Datos enviados exitosamente");
-  }
+  // if (!publicado) {
+  //   Serial.print("[MQTT] ❌ Error enviando datos. Estado: ");
+  //   Serial.print(mqttClient.state());
+  //   Serial.print(" | Conectado: ");
+  //   Serial.println(mqttClient.connected() ? "Sí" : "No");
+  // } else {
+  //   Serial.println("[MQTT] ✅ Datos enviados exitosamente");
+  // }
 }
 
 
@@ -305,16 +357,16 @@ void enviarDatosMQTT(String jsonString) {
 void setup() {
   Serial.begin(115200);
   delay(1000); // Esperar a que Serial esté listo
-  Serial.println("=== INICIO SETUP ===");
+  // Serial.println("=== INICIO SETUP ===");
   
-  Serial.println("Paso 1: Configurando ADC...");
+  // Serial.println("Paso 1: Configurando ADC...");
   analogReadResolution(12); //Configura resolución a 12 bits (0-4095)
   analogSetAttenuation(ADC_11db); //Configura rango de medición 0-3.6V (IMPORTANTE)
   
-  Serial.println("Paso 2: Iniciando I2C...");
+  // Serial.println("Paso 2: Iniciando I2C...");
   Wire.begin();  //Inicia I2C
 
-  Serial.println("Paso 3: Configurando pines de bombas...");
+  // Serial.println("Paso 3: Configurando pines de bombas...");
   //Configurar pines de bombas y establecer estados iniciales
   pinMode(PIN_BOMBA_PPAL, OUTPUT);
   bombaPpalEstado = true;  //Bomba principal ON por defecto
@@ -340,107 +392,107 @@ void setup() {
   bombaAguaReservaEstado = false;  //Apagada por defecto
   digitalWrite(PIN_BOMBA_AGUA_RESERVA, LOW);
   
-  Serial.println("Paso 4: Configurando pines de sensores...");
+  // Serial.println("Paso 4: Configurando pines de sensores...");
   //seteo pull-down a todos los pines de on/off
   for (int i = 0; i < n_pines_on_off; i++) {
     pinMode(pines_on_off[i], INPUT_PULLDOWN);
   }
   
-  Serial.println("Paso 5: Iniciando DS18B20...");
+  // Serial.println("Paso 5: Iniciando DS18B20...");
   // instancio e inicio el DS18B20
   sensors.begin(); 
 
-  Serial.println("1. Conectando a WiFi...");
+  // Serial.println("1. Conectando a WiFi...");
   WiFi.begin(ssid, password);
   int intentos = 0;
   while (WiFi.status() != WL_CONNECTED) {
     delay(3000);
     intentos++;
-    Serial.print("   Intentando WiFi... (");
-    Serial.print(intentos);
-    Serial.println(")");
+    // Serial.print("   Intentando WiFi... (");
+    // Serial.print(intentos);
+    // Serial.println(")");
     if (intentos > 10) {
-      Serial.println("[WiFi] ❌ Error: No se pudo conectar después de 10 intentos");
+      // Serial.println("[WiFi] ❌ Error: No se pudo conectar después de 10 intentos");
       break;
     }
   }
   
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WiFi] ❌ Error: No conectado");
-  } else {
-    Serial.println("   WiFi conectado!");
-  }
+  // if (WiFi.status() != WL_CONNECTED) {
+  //   Serial.println("[WiFi] ❌ Error: No conectado");
+  // } else {
+  //   Serial.println("   WiFi conectado!");
+  // }
   
-  Serial.println("2. Configurando MQTT...");
+  // Serial.println("2. Configurando MQTT...");
   // Configurar cliente MQTT (sin TLS para Mosquitto público)
   mqttClient.setServer(mqttBrokerHost, mqttBrokerPort);
   mqttClient.setBufferSize(2048);  // Buffer más grande para mensajes JSON
   mqttClient.setKeepAlive(60);     // Keepalive de 60 segundos
   mqttClient.setCallback(mqttCallback);  // Callback para recibir mensajes
   
-  Serial.println("3. Conectando a MQTT...");
-  Serial.print("   Broker: ");
-  Serial.print(mqttBrokerHost);
-  Serial.print(":");
-  Serial.println(mqttBrokerPort);
-  Serial.print("   Client ID: ");
-  Serial.println(mqttClientId);
+  // Serial.println("3. Conectando a MQTT...");
+  // Serial.print("   Broker: ");
+  // Serial.print(mqttBrokerHost);
+  // Serial.print(":");
+  // Serial.println(mqttBrokerPort);
+  // Serial.print("   Client ID: ");
+  // Serial.println(mqttClientId);
   
   // Conectar a MQTT (con timeout para no bloquear)
   int intentosMQTT = 0;
   while (!mqttClient.connected() && intentosMQTT < 5) {
-    Serial.print("   Intento ");
-    Serial.print(intentosMQTT + 1);
-    Serial.println(" de conexión...");
+    // Serial.print("   Intento ");
+    // Serial.print(intentosMQTT + 1);
+    // Serial.println(" de conexión...");
     
     if (mqttClient.connect(mqttClientId)) {
-      Serial.println("   ✅ MQTT conectado!");
-      Serial.print("   Estado: ");
-      Serial.println(mqttClient.state());
+      // Serial.println("   ✅ MQTT conectado!");
+      // Serial.print("   Estado: ");
+      // Serial.println(mqttClient.state());
       
       // Suscribirse al topic de comandos de bombas
       if (mqttClient.subscribe(mqttTopicComandos, 1)) {
-        Serial.print("   ✅ Suscrito a comandos: ");
-        Serial.println(mqttTopicComandos);
+        // Serial.print("   ✅ Suscrito a comandos: ");
+        // Serial.println(mqttTopicComandos);
       } else {
-        Serial.print("   ⚠️ Error suscribiéndose a: ");
-        Serial.println(mqttTopicComandos);
+        // Serial.print("   ⚠️ Error suscribiéndose a: ");
+        // Serial.println(mqttTopicComandos);
       }
     } else {
-      Serial.print("[MQTT] ❌ Error de conexión, código: ");
-      int estado = mqttClient.state();
-      Serial.print(estado);
-      Serial.print(" (");
-      // Explicar el código de error
-      switch(estado) {
-        case -4: Serial.print("MQTT_CONNECTION_TIMEOUT"); break;
-        case -3: Serial.print("MQTT_CONNECTION_LOST"); break;
-        case -2: Serial.print("MQTT_CONNECT_FAILED"); break;
-        case -1: Serial.print("MQTT_DISCONNECTED"); break;
-        case 1: Serial.print("MQTT_CONNECT_BAD_PROTOCOL"); break;
-        case 2: Serial.print("MQTT_CONNECT_BAD_CLIENT_ID"); break;
-        case 3: Serial.print("MQTT_CONNECT_UNAVAILABLE"); break;
-        case 4: Serial.print("MQTT_CONNECT_BAD_CREDENTIALS"); break;
-        case 5: Serial.print("MQTT_CONNECT_UNAUTHORIZED"); break;
-        default: Serial.print("Desconocido"); break;
-      }
-      Serial.println(")");
+      // Serial.print("[MQTT] ❌ Error de conexión, código: ");
+      // int estado = mqttClient.state();
+      // Serial.print(estado);
+      // Serial.print(" (");
+      // // Explicar el código de error
+      // switch(estado) {
+      //   case -4: Serial.print("MQTT_CONNECTION_TIMEOUT"); break;
+      //   case -3: Serial.print("MQTT_CONNECTION_LOST"); break;
+      //   case -2: Serial.print("MQTT_CONNECT_FAILED"); break;
+      //   case -1: Serial.print("MQTT_DISCONNECTED"); break;
+      //   case 1: Serial.print("MQTT_CONNECT_BAD_PROTOCOL"); break;
+      //   case 2: Serial.print("MQTT_CONNECT_BAD_CLIENT_ID"); break;
+      //   case 3: Serial.print("MQTT_CONNECT_UNAVAILABLE"); break;
+      //   case 4: Serial.print("MQTT_CONNECT_BAD_CREDENTIALS"); break;
+      //   case 5: Serial.print("MQTT_CONNECT_UNAUTHORIZED"); break;
+      //   default: Serial.print("Desconocido"); break;
+      // }
+      // Serial.println(")");
       intentosMQTT++;
       delay(3000);
     }
   }
   
-  if (!mqttClient.connected()) {
-    Serial.println("[MQTT] ⚠️ No conectado, continuando sin MQTT...");
-  }
+  // if (!mqttClient.connected()) {
+  //   Serial.println("[MQTT] ⚠️ No conectado, continuando sin MQTT...");
+  // }
   
   // Crear semáforo mutex para proteger variables compartidas
   mutexBombas = xSemaphoreCreateMutex();
-  if (mutexBombas == NULL) {
-    Serial.println("[SETUP] ❌ Error creando semáforo mutex");
-  }
+  // if (mutexBombas == NULL) {
+  //   Serial.println("[SETUP] ❌ Error creando semáforo mutex");
+  // }
   
-  Serial.println("=== FIN SETUP ===");
+  // Serial.println("=== FIN SETUP ===");
   
 }
 
@@ -448,6 +500,25 @@ void loop() {
     // ========================================================================
     // LECTURA DE SENSORES Y ENVÍO A MQTT
     // ========================================================================
+    
+    // OPTIMIZACIÓN: Leer estados de bombas PRIMERO (rápido, ~microsegundos)
+    // Esto permite verificar el estado inmediatamente sin esperar las lecturas de sensores
+    byte transmitirEstado = digitalRead(PIN_TRASMITIR);
+    byte hhEstado = digitalRead(HH);
+    byte hEstado = digitalRead(H);
+    byte lEstado = digitalRead(L);
+    byte llEstado = digitalRead(LL);
+    
+    // Leer estados reales de los pines físicos de las bombas (MUY RÁPIDO)
+    bool bombaPpalEstadoActual = (digitalRead(PIN_BOMBA_PPAL) == HIGH);
+    bool bombaAEstadoActual = (digitalRead(PIN_BOMBA_A) == HIGH);
+    bool bombaBEstadoActual = (digitalRead(PIN_BOMBA_B) == HIGH);
+    bool bombaMicroEstadoActual = (digitalRead(PIN_BOMBA_micro) == HIGH);
+    bool bombaFEEstadoActual = (digitalRead(PIN_BOMBA_FE) == HIGH);
+    bool bombaAguaReservaEstadoActual = (digitalRead(PIN_BOMBA_AGUA_RESERVA) == HIGH);
+    
+    // Ahora leer sensores (esto toma tiempo: ~8-10 segundos para 10 iteraciones)
+    // OPTIMIZACIÓN: Procesar MQTT durante la lectura para responder comandos inmediatamente
     for (int i = 0; i < numIter; i++) {
       sensors.requestTemperatures();
       tAguaArray[i] = sensors.getTempCByIndex(0);
@@ -455,6 +526,11 @@ void loop() {
       distanciaArray[i] = leerAngulo();
       conductividadArray[i] = analogRead(PIN_EC); // leo la conductividad
       phArray[i] = analogRead(PIN_PH); // leo el ph
+      
+      // Procesar MQTT entre iteraciones para no bloquear comandos
+      if (WiFi.status() == WL_CONNECTED && (i % 3 == 0)) { // Cada 3 iteraciones
+        mqttClient.loop();
+      }
     }
 
     StaticJsonDocument<2000> jsonDoc; 
@@ -470,28 +546,18 @@ void loop() {
       phJson.add(phArray[i]);
     }
 
-    byte transmitirEstado = digitalRead(PIN_TRASMITIR);
-    
-    byte hhEstado = digitalRead(HH);
-    byte hEstado = digitalRead(H);
-    byte lEstado = digitalRead(L);
-    byte llEstado = digitalRead(LL);
-
-
-
     jsonDoc["HH"] = hhEstado;
     jsonDoc["H"] = hEstado;
     jsonDoc["L"] = lEstado;
     jsonDoc["LL"] = llEstado;
 
-    // Leer estados reales de los pines físicos de las bombas
-    // Esto refleja el estado real del hardware, independientemente de cómo se haya cambiado
-    jsonDoc["bomba_ppal"] = (digitalRead(PIN_BOMBA_PPAL) == HIGH);
-    jsonDoc["bombaA"] = (digitalRead(PIN_BOMBA_A) == HIGH);
-    jsonDoc["bombaB"] = (digitalRead(PIN_BOMBA_B) == HIGH);
-    jsonDoc["bombaMicro"] = (digitalRead(PIN_BOMBA_micro) == HIGH);
-    jsonDoc["bombaFE"] = (digitalRead(PIN_BOMBA_FE) == HIGH);
-    jsonDoc["bombaAguaReserva"] = (digitalRead(PIN_BOMBA_AGUA_RESERVA) == HIGH);
+    // Usar los estados de bombas leídos al inicio (ya están disponibles)
+    jsonDoc["bomba_ppal"] = bombaPpalEstadoActual;
+    jsonDoc["bombaA"] = bombaAEstadoActual;
+    jsonDoc["bombaB"] = bombaBEstadoActual;
+    jsonDoc["bombaMicro"] = bombaMicroEstadoActual;
+    jsonDoc["bombaFE"] = bombaFEEstadoActual;
+    jsonDoc["bombaAguaReserva"] = bombaAguaReservaEstadoActual;
 
     //TODO LO QUE VIENE ABAJO LO HAGO SI EL PIN_TRASMITIR ESTA LOW
     // Serial.print("transmitirEstado: "); Serial.println(transmitirEstado);
@@ -501,21 +567,21 @@ void loop() {
       
       // Verificar WiFi
       if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("[WiFi] ❌ Desconectado, reconectando...");
+        // Serial.println("[WiFi] ❌ Desconectado, reconectando...");
         WiFi.begin(ssid, password);
         int intentosReconexion = 0;
         while (WiFi.status() != WL_CONNECTED && intentosReconexion < 5) {
           delay(3000);
           intentosReconexion++;
-          Serial.print("[WiFi] Intentando reconectar... (");
-          Serial.print(intentosReconexion);
-          Serial.println("/5)");
+          // Serial.print("[WiFi] Intentando reconectar... (");
+          // Serial.print(intentosReconexion);
+          // Serial.println("/5)");
         }
         if (WiFi.status() == WL_CONNECTED) {
-          Serial.println("[WiFi] ✅ Reconectado exitosamente");
+          // Serial.println("[WiFi] ✅ Reconectado exitosamente");
           reconectarMQTT(); // Reconectar MQTT después de reconectar WiFi
         } else {
-          Serial.println("[WiFi] ❌ Error: No se pudo reconectar");
+          // Serial.println("[WiFi] ❌ Error: No se pudo reconectar");
         }
       }
       
@@ -523,7 +589,7 @@ void loop() {
       if (WiFi.status() == WL_CONNECTED) {
         // Verificar conexión MQTT antes de enviar
         if (!mqttClient.connected()) {
-          Serial.println("[MQTT] ⚠️ Desconectado, intentando reconectar...");
+          // Serial.println("[MQTT] ⚠️ Desconectado, intentando reconectar...");
           reconectarMQTT();
         }
         
