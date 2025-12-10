@@ -417,11 +417,13 @@ void setup() {
     }
   }
   
-  // if (WiFi.status() != WL_CONNECTED) {
-  //   Serial.println("[WiFi] ❌ Error: No conectado");
-  // } else {
-  //   Serial.println("   WiFi conectado!");
-  // }
+  // Mini logger de conexión WiFi
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("[WiFi] ✅ Conectado | IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("[WiFi] ❌ No conectado");
+  }
   
   // Serial.println("2. Configurando MQTT...");
   // Configurar cliente MQTT (sin TLS para Mosquitto público)
@@ -482,17 +484,15 @@ void setup() {
     }
   }
   
-  // if (!mqttClient.connected()) {
-  //   Serial.println("[MQTT] ⚠️ No conectado, continuando sin MQTT...");
-  // }
+  // Mini logger de conexión MQTT
+  if (mqttClient.connected()) {
+    Serial.println("[MQTT] ✅ Conectado");
+  } else {
+    Serial.println("[MQTT] ❌ No conectado");
+  }
   
   // Crear semáforo mutex para proteger variables compartidas
   mutexBombas = xSemaphoreCreateMutex();
-  // if (mutexBombas == NULL) {
-  //   Serial.println("[SETUP] ❌ Error creando semáforo mutex");
-  // }
-  
-  // Serial.println("=== FIN SETUP ===");
   
 }
 
