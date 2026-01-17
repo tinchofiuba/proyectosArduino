@@ -359,7 +359,11 @@ void loop() {
     }
 
     StaticJsonDocument<2000> jsonDoc; 
+    
+    // Arrays de sensores (el backend espera estos campos)
     JsonArray tAguaJson = jsonDoc.createNestedArray("tAgua");
+    JsonArray tempAmbJson = jsonDoc.createNestedArray("tempAmb");  // Vacío (no hay sensor DHT configurado)
+    JsonArray humedadJson = jsonDoc.createNestedArray("humedad");  // Vacío (no hay sensor DHT configurado)
     JsonArray distanciaJson = jsonDoc.createNestedArray("distancia");
     JsonArray tdsJson = jsonDoc.createNestedArray("tds");
     JsonArray phJson = jsonDoc.createNestedArray("phs");
@@ -369,6 +373,7 @@ void loop() {
       distanciaJson.add(distanciaArray[i]);
       tdsJson.add(conductividadArray[i]);
       phJson.add(phArray[i]);
+      // tempAmb y humedad se dejan vacíos (arrays vacíos)
     }
 
     byte transmitirEstado = digitalRead(PIN_TRASMITIR);
@@ -398,19 +403,25 @@ void loop() {
 
 
 
-    jsonDoc["HH"] = hhEstado;
-    jsonDoc["H"] = hEstado;
-    jsonDoc["L"] = lEstado;
-    jsonDoc["LL"] = llEstado;
+    // Mapear sensores de nivel a los campos que espera el backend
+    jsonDoc["pinLLAHH"] = (bool)hhEstado;   // High-High
+    jsonDoc["pinLLALL"] = (bool)llEstado;   // Low-Low
+    jsonDoc["pinValvula"] = 0;              // No hay pin específico configurado, se envía 0
+    // Campos opcionales de nivel
+    jsonDoc["LLAHH_r"] = (bool)hhEstado;
+    jsonDoc["LLANH_r"] = (bool)hEstado;     // High intermedio
+    jsonDoc["LLANL_r"] = (bool)lEstado;     // Low intermedio
+    jsonDoc["LLALL_r"] = (bool)llEstado;
 
     // Proteger lectura de variables compartidas de bombas
+    // Usar los nombres que espera el backend
     if (xSemaphoreTake(mutexBombas, portMAX_DELAY) == pdTRUE) {
-      jsonDoc["bomba_ppal"] = bombaPpalEstado;
-      jsonDoc["bombaA"] = bombaAEstado;
-      jsonDoc["bombaB"] = bombaBEstado;
-      jsonDoc["bombaMicro"] = bombaMicroEstado;
-      jsonDoc["bombaFE"] = bombaFEEstado;
-      jsonDoc["bombaAguaReserva"] = bombaAguaReservaEstado;
+      jsonDoc["pinBomba"] = bombaPpalEstado;      // bomba_ppal -> pinBomba
+      jsonDoc["bomba_A"] = bombaAEstado;          // bombaA -> bomba_A
+      jsonDoc["bomba_B"] = bombaBEstado;          // bombaB -> bomba_B
+      jsonDoc["bomba_micro"] = bombaMicroEstado;  // bombaMicro -> bomba_micro
+      jsonDoc["bomba_Fe"] = bombaFEEstado;        // bombaFE -> bomba_Fe
+      jsonDoc["bomba_agua_reserva"] = bombaAguaReservaEstado;  // Necesario para el backend
       xSemaphoreGive(mutexBombas);
     }
 
