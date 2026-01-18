@@ -237,8 +237,8 @@ void enviarConfirmacionAlBackend(const char* bombaNombre, bool estado) {
   String jsonString;
   serializeJson(doc, jsonString);
   
-  // Serial.print("📤 Enviando confirmación: ");
-  // Serial.println(jsonString);
+  Serial.print("📤 Enviando confirmación: ");
+  Serial.println(jsonString);
   
   int httpResponseCode = http.POST(jsonString);
   
